@@ -92,7 +92,7 @@ const createPayment = async (req, res, next) => {
       payment_method = 'cash',
       notes 
     } = req.body;
-    
+    console.log(req.body)
     // Check if member exists
     const { data: member, error: memberError } = await supabaseClient
       .from('members')
