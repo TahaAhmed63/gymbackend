@@ -11,7 +11,7 @@ const otpStore = new Map();
 const initiateRegistration = async (req, res, next) => {
   try {
     const { name, email, phone, password, gymName, country } = req.body;
-    console.log(req.body,"req.body")
+    
     // Check if user already exists
     const { data: existingUser } = await supabaseClient
       .from('users')
@@ -28,6 +28,7 @@ const initiateRegistration = async (req, res, next) => {
 
     // Generate and send OTP
     const otp = generateOTP();
+    console.log('Generated OTP:', otp); // Debug log
     const emailSent = await sendOTPEmail(email, otp);
 
     if (!emailSent) {
@@ -42,6 +43,13 @@ const initiateRegistration = async (req, res, next) => {
       otp,
       data: { name, email, phone, password, gymName, country },
       timestamp: Date.now()
+    });
+
+    // Debug log
+    console.log('Stored OTP data:', {
+      email,
+      storedOtp: otp,
+      timestamp: new Date().toISOString()
     });
 
     res.status(200).json({
@@ -60,11 +68,13 @@ const initiateRegistration = async (req, res, next) => {
 const verifyAndRegister = async (req, res, next) => {
   try {
     const { email, otp } = req.body;
+    console.log('Verification attempt:', { email, receivedOtp: otp }); // Debug log
 
     // Get stored registration data
     const storedData = otpStore.get(email);
     
     if (!storedData) {
+      console.log('No stored data found for email:', email); // Debug log
       return res.status(400).json({
         success: false,
         message: 'Registration session expired or invalid'
@@ -72,16 +82,25 @@ const verifyAndRegister = async (req, res, next) => {
     }
 
     // Check OTP expiration (10 minutes)
-    if (Date.now() - storedData.timestamp > 10 * 60 * 1000) {
+    const timeElapsed = Date.now() - storedData.timestamp;
+    console.log('Time elapsed since OTP generation:', timeElapsed / 1000, 'seconds'); // Debug log
+
+    if (timeElapsed > 10 * 60 * 1000) {
       otpStore.delete(email);
       return res.status(400).json({
         success: false,
         message: 'OTP expired'
       });
     }
-console.log(storedData.otp,otp,"sstoreddataotp")
+
     // Verify OTP
-    if (storedData.otp !== Number(otp)) {
+    console.log('Comparing OTPs:', {
+      received: otp,
+      stored: storedData.otp,
+      match: otp === storedData.otp
+    }); // Debug log
+
+    if (otp !== storedData.otp) {
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP'
