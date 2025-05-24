@@ -93,6 +93,7 @@ const createPlan = async (req, res, next) => {
       price,
       description 
     } = req.body;
+    console.log(req.body,"req.body")
     const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
