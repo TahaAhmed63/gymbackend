@@ -81,7 +81,7 @@ const verifyAndRegister = async (req, res, next) => {
     }
 console.log(storedData.otp,otp,"sstoreddataotp")
     // Verify OTP
-    if (storedData.otp !== otp) {
+    if (storedData.otp !== Number(otp)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP'
