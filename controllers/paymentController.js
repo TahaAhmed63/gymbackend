@@ -10,11 +10,16 @@ const getAllPayments = async (req, res, next) => {
   try {
     const { member_id, start_date, end_date } = req.query;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
     // Build query
     let query = supabaseClient
       .from('payments')
-      .select('*, members(id, name)', { count: 'exact' });
+      .select(`
+        *,
+        members!inner(id, name, phone)
+      `, { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (member_id) {
@@ -57,11 +62,16 @@ const getAllPayments = async (req, res, next) => {
 const getPaymentById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('payments')
-      .select('*, members(id, name)')
+      .select(`
+        *,
+        members!inner(id, name, phone)
+      `)
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
@@ -92,12 +102,14 @@ const createPayment = async (req, res, next) => {
       payment_method = 'cash',
       notes 
     } = req.body;
-    console.log(req.body)
-    // Check if member exists
+    const gym_id = req.user.gym_id;
+    
+    // Check if member exists and belongs to the gym
     const { data: member, error: memberError } = await supabaseClient
       .from('members')
       .select('id')
       .eq('id', member_id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (memberError || !member) {
@@ -120,7 +132,8 @@ const createPayment = async (req, res, next) => {
         due_amount,
         payment_date,
         payment_method,
-        notes
+        notes,
+        gym_id
       }])
       .select()
       .single();
@@ -156,12 +169,14 @@ const updatePayment = async (req, res, next) => {
       payment_method,
       notes 
     } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if payment exists
+    // Check if payment exists and belongs to the gym
     const { data: existingPayment, error: findError } = await supabaseClient
       .from('payments')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingPayment) {
@@ -187,6 +202,7 @@ const updatePayment = async (req, res, next) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -214,12 +230,14 @@ const updatePayment = async (req, res, next) => {
 const deletePayment = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
-    // Check if payment exists
+    // Check if payment exists and belongs to the gym
     const { data: existingPayment, error: findError } = await supabaseClient
       .from('payments')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingPayment) {
@@ -233,7 +251,8 @@ const deletePayment = async (req, res, next) => {
     const { error } = await supabaseClient
       .from('payments')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
     if (error) {
       return res.status(400).json({
@@ -258,20 +277,28 @@ const deletePayment = async (req, res, next) => {
 const getPaymentSummary = async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
+    const gym_id = req.user.gym_id;
     
-    if (!start_date || !end_date) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date and end date are required'
-      });
+    // Build query
+    let query = supabaseClient
+      .from('payments')
+      .select(`
+        total_amount,
+        amount_paid,
+        due_amount
+      `)
+      .eq('gym_id', gym_id);
+    
+    // Apply date filters
+    if (start_date) {
+      query = query.gte('payment_date', start_date);
     }
     
-    // Get all payments in the date range
-    const { data, error } = await supabaseClient
-      .from('payments')
-      .select('amount_paid, total_amount, due_amount, payment_date, payment_method')
-      .gte('payment_date', start_date)
-      .lte('payment_date', end_date);
+    if (end_date) {
+      query = query.lte('payment_date', end_date);
+    }
+    
+    const { data, error } = await query;
     
     if (error) {
       return res.status(400).json({
@@ -280,40 +307,13 @@ const getPaymentSummary = async (req, res, next) => {
       });
     }
     
-    // Calculate summary data
-    const totalReceived = data.reduce((sum, payment) => sum + payment.amount_paid, 0);
-    const totalDue = data.reduce((sum, payment) => sum + payment.due_amount, 0);
-    const totalBilled = data.reduce((sum, payment) => sum + payment.total_amount, 0);
-    
-    // Calculate payment methods distribution
-    const paymentMethods = data.reduce((methods, payment) => {
-      const method = payment.payment_method || 'cash';
-      methods[method] = (methods[method] || 0) + payment.amount_paid;
-      return methods;
-    }, {});
-    
-    // Generate daily revenue data
-    const dailyRevenue = data.reduce((days, payment) => {
-      const day = payment.payment_date.split('T')[0];
-      days[day] = (days[day] || 0) + payment.amount_paid;
-      return days;
-    }, {});
-    
-    const summary = {
-      period: {
-        startDate: start_date,
-        endDate: end_date
-      },
-      totalReceived,
-      totalDue,
-      totalBilled,
-      collectionRate: totalBilled > 0 ? (totalReceived / totalBilled) * 100 : 0,
-      paymentMethods,
-      dailyRevenue: Object.entries(dailyRevenue).map(([date, amount]) => ({
-        date,
-        amount
-      })).sort((a, b) => a.date.localeCompare(b.date))
-    };
+    // Calculate summary
+    const summary = data.reduce((acc, payment) => {
+      acc.total_amount += Number(payment.total_amount) || 0;
+      acc.amount_paid += Number(payment.amount_paid) || 0;
+      acc.due_amount += Number(payment.due_amount) || 0;
+      return acc;
+    }, { total_amount: 0, amount_paid: 0, due_amount: 0 });
     
     res.status(200).json({
       success: true,
@@ -325,19 +325,21 @@ const getPaymentSummary = async (req, res, next) => {
 };
 
 /**
- * Get payments by member
- * @route GET /api/payments/member/:memberId
+ * Get member payments
+ * @route GET /api/payments/member/:member_id
  */
 const getMemberPayments = async (req, res, next) => {
   try {
-    const { memberId } = req.params;
+    const { member_id } = req.params;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
-    // Check if member exists
+    // Check if member exists and belongs to the gym
     const { data: member, error: memberError } = await supabaseClient
       .from('members')
-      .select('id, name')
-      .eq('id', memberId)
+      .select('id')
+      .eq('id', member_id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (memberError || !member) {
@@ -347,11 +349,12 @@ const getMemberPayments = async (req, res, next) => {
       });
     }
     
-    // Get member payments
+    // Get member's payments
     const { data, error, count } = await supabaseClient
       .from('payments')
       .select('*', { count: 'exact' })
-      .eq('member_id', memberId)
+      .eq('member_id', member_id)
+      .eq('gym_id', gym_id)
       .range(pagination.startIndex, pagination.startIndex + pagination.limit - 1)
       .order('payment_date', { ascending: false });
     
@@ -362,20 +365,9 @@ const getMemberPayments = async (req, res, next) => {
       });
     }
     
-    // Calculate total paid and due
-    const totalPaid = data.reduce((sum, payment) => sum + payment.amount_paid, 0);
-    const totalDue = data.reduce((sum, payment) => sum + payment.due_amount, 0);
-    
     res.status(200).json({
       success: true,
-      data: {
-        member,
-        summary: {
-          totalPaid,
-          totalDue
-        },
-        payments: paginatedResponse(data, count, pagination)
-      }
+      ...paginatedResponse(data, count, pagination)
     });
   } catch (error) {
     next(error);

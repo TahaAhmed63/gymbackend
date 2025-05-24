@@ -7,10 +7,12 @@ const { supabaseClient } = require('../config/supabase');
 const getExpiringMemberships = async (req, res, next) => {
   try {
     const { days = 15 } = req.query;
+    const gym_id = req.user.gym_id;
     
     // Call the stored function
     const { data, error } = await supabaseClient.rpc('get_expiring_memberships', {
-      days_range: parseInt(days)
+      days_range: parseInt(days),
+      p_gym_id: gym_id
     });
     
     if (error) {
@@ -51,10 +53,12 @@ const getExpiringMemberships = async (req, res, next) => {
 const getUpcomingBirthdays = async (req, res, next) => {
   try {
     const { days = 30 } = req.query;
+    const gym_id = req.user.gym_id;
     
     // Call the stored function
     const { data, error } = await supabaseClient.rpc('get_upcoming_birthdays', {
-      days_range: parseInt(days)
+      days_range: parseInt(days),
+      p_gym_id: gym_id
     });
     
     if (error) {
@@ -79,6 +83,8 @@ const getUpcomingBirthdays = async (req, res, next) => {
  */
 const getPaymentStatusReport = async (req, res, next) => {
   try {
+    const gym_id = req.user.gym_id;
+    
     // Get all members with their plan and payment information
     const { data: members, error: memberError } = await supabaseClient
       .from('members')
@@ -91,7 +97,8 @@ const getPaymentStatusReport = async (req, res, next) => {
           price
         )
       `)
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .eq('gym_id', gym_id);
     
     if (memberError) {
       return res.status(400).json({
@@ -106,6 +113,7 @@ const getPaymentStatusReport = async (req, res, next) => {
       .from('payments')
       .select('member_id, amount_paid, total_amount, due_amount, payment_date')
       .in('member_id', memberIds)
+      .eq('gym_id', gym_id)
       .order('payment_date', { ascending: false });
     
     if (paymentError) {
@@ -169,6 +177,7 @@ const getPaymentStatusReport = async (req, res, next) => {
 const getAttendanceSummaryReport = async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
+    const gym_id = req.user.gym_id;
     
     if (!start_date || !end_date) {
       return res.status(400).json({
@@ -181,7 +190,8 @@ const getAttendanceSummaryReport = async (req, res, next) => {
     const { data: members, error: memberError } = await supabaseClient
       .from('members')
       .select('id, name, batch_id')
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .eq('gym_id', gym_id);
     
     if (memberError) {
       return res.status(400).json({
@@ -194,6 +204,7 @@ const getAttendanceSummaryReport = async (req, res, next) => {
     const { data: attendance, error: attendanceError } = await supabaseClient
       .from('attendance')
       .select('member_id, date, status')
+      .eq('gym_id', gym_id)
       .gte('date', start_date)
       .lte('date', end_date)
       .in('member_id', members.map(m => m.id));
@@ -248,8 +259,7 @@ const getAttendanceSummaryReport = async (req, res, next) => {
           ? (attendance.filter(a => a.status === 'present').length / attendance.length) * 100 
           : 0,
       members_with_perfect_attendance: report.filter(r => r.attendance_percentage === 100 && r.total_records > 0).length,
-      members_with_low_attendance: report.filter(r => r.attendance_percentage < 50 && r.total_records > 0).length,
-      members_with_no_attendance: report.filter(r => r.total_records === 0).length
+      members_with_poor_attendance: report.filter(r => r.attendance_percentage < 50 && r.total_records > 0).length
     };
     
     res.status(200).json({
@@ -271,6 +281,7 @@ const getAttendanceSummaryReport = async (req, res, next) => {
 const getFinancialSummaryReport = async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
+    const gym_id = req.user.gym_id;
     
     if (!start_date || !end_date) {
       return res.status(400).json({
@@ -279,10 +290,11 @@ const getFinancialSummaryReport = async (req, res, next) => {
       });
     }
     
-    // Get payments for the date range
+    // Get payments for the period
     const { data: payments, error: paymentError } = await supabaseClient
       .from('payments')
-      .select('id, amount_paid, payment_date, payment_method')
+      .select('amount_paid, total_amount, due_amount, payment_date, payment_method')
+      .eq('gym_id', gym_id)
       .gte('payment_date', start_date)
       .lte('payment_date', end_date);
     
@@ -293,10 +305,11 @@ const getFinancialSummaryReport = async (req, res, next) => {
       });
     }
     
-    // Get expenses for the date range
+    // Get expenses for the period
     const { data: expenses, error: expenseError } = await supabaseClient
       .from('expenses')
-      .select('id, amount, date')
+      .select('amount, date, category')
+      .eq('gym_id', gym_id)
       .gte('date', start_date)
       .lte('date', end_date);
     
@@ -307,69 +320,76 @@ const getFinancialSummaryReport = async (req, res, next) => {
       });
     }
     
-    // Calculate financial metrics
-    const totalRevenue = payments.reduce((sum, payment) => sum + parseFloat(payment.amount_paid), 0);
-    const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-    const netProfit = totalRevenue - totalExpenses;
-    
-    // Group payments by method
-    const paymentMethods = payments.reduce((acc, payment) => {
+    // Calculate payment statistics
+    const paymentStats = payments.reduce((acc, payment) => {
+      acc.total_received += Number(payment.amount_paid) || 0;
+      acc.total_billed += Number(payment.total_amount) || 0;
+      acc.total_due += Number(payment.due_amount) || 0;
+      
+      // Group by payment method
       const method = payment.payment_method || 'cash';
-      if (!acc[method]) {
-        acc[method] = 0;
+      if (!acc.payment_methods[method]) {
+        acc.payment_methods[method] = 0;
       }
-      acc[method] += parseFloat(payment.amount_paid);
+      acc.payment_methods[method] += Number(payment.amount_paid) || 0;
+      
       return acc;
-    }, {});
+    }, { 
+      total_received: 0, 
+      total_billed: 0, 
+      total_due: 0,
+      payment_methods: {}
+    });
     
-    // Group by date for chart data
-    const revenueByDate = payments.reduce((acc, payment) => {
-      const date = payment.payment_date;
-      if (!acc[date]) {
-        acc[date] = 0;
+    // Calculate expense statistics
+    const expenseStats = expenses.reduce((acc, expense) => {
+      acc.total_expenses += Number(expense.amount) || 0;
+      
+      // Group by category
+      const category = expense.category || 'Uncategorized';
+      if (!acc.categories[category]) {
+        acc.categories[category] = 0;
       }
-      acc[date] += parseFloat(payment.amount_paid);
+      acc.categories[category] += Number(expense.amount) || 0;
+      
       return acc;
-    }, {});
+    }, { 
+      total_expenses: 0,
+      categories: {}
+    });
     
-    const expensesByDate = expenses.reduce((acc, expense) => {
-      const date = expense.date;
-      if (!acc[date]) {
-        acc[date] = 0;
-      }
-      acc[date] += parseFloat(expense.amount);
-      return acc;
-    }, {});
-    
-    // Combine dates for chart
-    const allDates = [...new Set([...Object.keys(revenueByDate), ...Object.keys(expensesByDate)])].sort();
-    
-    const chartData = allDates.map(date => ({
-      date,
-      revenue: revenueByDate[date] || 0,
-      expenses: expensesByDate[date] || 0,
-      profit: (revenueByDate[date] || 0) - (expensesByDate[date] || 0)
-    }));
+    // Calculate net profit
+    const net_profit = paymentStats.total_received - expenseStats.total_expenses;
     
     res.status(200).json({
       success: true,
       data: {
-        summary: {
-          total_revenue: totalRevenue,
-          total_expenses: totalExpenses,
-          net_profit: netProfit,
-          profit_margin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
-          date_range: {
-            start_date,
-            end_date
-          }
+        period: {
+          start_date,
+          end_date
         },
-        payment_methods: Object.entries(paymentMethods).map(([method, amount]) => ({
-          method,
-          amount,
-          percentage: (amount / totalRevenue) * 100
-        })),
-        chart_data: chartData
+        revenue: {
+          total_received: paymentStats.total_received,
+          total_billed: paymentStats.total_billed,
+          total_due: paymentStats.total_due,
+          payment_methods: Object.entries(paymentStats.payment_methods).map(([method, amount]) => ({
+            method,
+            amount
+          }))
+        },
+        expenses: {
+          total: expenseStats.total_expenses,
+          categories: Object.entries(expenseStats.categories).map(([category, amount]) => ({
+            category,
+            amount
+          }))
+        },
+        summary: {
+          net_profit,
+          collection_rate: paymentStats.total_billed > 0 
+            ? (paymentStats.total_received / paymentStats.total_billed) * 100 
+            : 0
+        }
       }
     });
   } catch (error) {

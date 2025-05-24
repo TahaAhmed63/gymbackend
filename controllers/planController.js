@@ -9,9 +9,16 @@ const getAllPlans = async (req, res, next) => {
   try {
     const pagination = getPaginationParams(req);
     const { search } = req.query;
+    const gym_id = req.user.gym_id;
     
     // Build query
-    let query = supabaseClient.from('plans').select('*', { count: 'exact' });
+    let query = supabaseClient
+      .from('plans')
+      .select(`
+        *,
+        members:members!plan_id(count)
+      `, { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply search filter if provided
     if (search) {
@@ -46,11 +53,16 @@ const getAllPlans = async (req, res, next) => {
 const getPlanById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('plans')
-      .select('*')
+      .select(`
+        *,
+        members:members!plan_id(count)
+      `)
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
@@ -81,6 +93,7 @@ const createPlan = async (req, res, next) => {
       price,
       description 
     } = req.body;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('plans')
@@ -88,7 +101,8 @@ const createPlan = async (req, res, next) => {
         name, 
         duration_in_months, 
         price,
-        description
+        description,
+        gym_id
       }])
       .select()
       .single();
@@ -123,12 +137,14 @@ const updatePlan = async (req, res, next) => {
       price,
       description 
     } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if plan exists
+    // Check if plan exists and belongs to the gym
     const { data: existingPlan, error: findError } = await supabaseClient
       .from('plans')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingPlan) {
@@ -149,6 +165,7 @@ const updatePlan = async (req, res, next) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -176,12 +193,14 @@ const updatePlan = async (req, res, next) => {
 const deletePlan = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
-    // Check if plan exists
+    // Check if plan exists and belongs to the gym
     const { data: existingPlan, error: findError } = await supabaseClient
       .from('plans')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingPlan) {
@@ -196,6 +215,7 @@ const deletePlan = async (req, res, next) => {
       .from('members')
       .select('id')
       .eq('plan_id', id)
+      .eq('gym_id', gym_id)
       .limit(1);
     
     if (!memberError && members.length > 0) {
@@ -209,7 +229,8 @@ const deletePlan = async (req, res, next) => {
     const { error } = await supabaseClient
       .from('plans')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
     if (error) {
       return res.status(400).json({

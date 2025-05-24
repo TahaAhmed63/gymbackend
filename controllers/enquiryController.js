@@ -10,9 +10,13 @@ const getAllEnquiries = async (req, res, next) => {
   try {
     const { status, search } = req.query;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
     // Build query
-    let query = supabaseClient.from('enquiries').select('*', { count: 'exact' });
+    let query = supabaseClient
+      .from('enquiries')
+      .select('*', { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (status) {
@@ -57,11 +61,13 @@ const getAllEnquiries = async (req, res, next) => {
 const getEnquiryById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('enquiries')
       .select('*')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
@@ -93,10 +99,11 @@ const getEnquiryById = async (req, res, next) => {
 const createEnquiry = async (req, res, next) => {
   try {
     const { name, phone, email, message, status = 'open' } = req.body;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('enquiries')
-      .insert([{ name, phone, email, message, status }])
+      .insert([{ name, phone, email, message, status, gym_id }])
       .select()
       .single();
     
@@ -125,12 +132,14 @@ const updateEnquiry = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, phone, email, message, status } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if enquiry exists
+    // Check if enquiry exists and belongs to the gym
     const { data: existingEnquiry, error: findError } = await supabaseClient
       .from('enquiries')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingEnquiry) {
@@ -152,6 +161,7 @@ const updateEnquiry = async (req, res, next) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -179,12 +189,14 @@ const updateEnquiry = async (req, res, next) => {
 const deleteEnquiry = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
-    // Check if enquiry exists
+    // Check if enquiry exists and belongs to the gym
     const { data: existingEnquiry, error: findError } = await supabaseClient
       .from('enquiries')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingEnquiry) {
@@ -198,7 +210,8 @@ const deleteEnquiry = async (req, res, next) => {
     const { error } = await supabaseClient
       .from('enquiries')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
     if (error) {
       return res.status(400).json({
@@ -224,6 +237,7 @@ const changeEnquiryStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const gym_id = req.user.gym_id;
     
     if (!status || !['open', 'closed'].includes(status)) {
       return res.status(400).json({
@@ -232,11 +246,12 @@ const changeEnquiryStatus = async (req, res, next) => {
       });
     }
     
-    // Check if enquiry exists
+    // Check if enquiry exists and belongs to the gym
     const { data: existingEnquiry, error: findError } = await supabaseClient
       .from('enquiries')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingEnquiry) {
@@ -254,6 +269,7 @@ const changeEnquiryStatus = async (req, res, next) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -266,7 +282,7 @@ const changeEnquiryStatus = async (req, res, next) => {
     
     res.status(200).json({
       success: true,
-      message: `Enquiry status changed to ${status}`,
+      message: 'Enquiry status updated successfully',
       data
     });
   } catch (error) {

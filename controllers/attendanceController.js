@@ -10,11 +10,16 @@ const getAttendance = async (req, res, next) => {
   try {
     const { member_id, date, batch_id, status } = req.query;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
     // Build query
     let query = supabaseClient
       .from('attendance')
-      .select('*, members(id, name)', { count: 'exact' });
+      .select(`
+        *,
+        members!inner(id, name, batch_id)
+      `, { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (member_id) {
@@ -61,12 +66,14 @@ const getAttendance = async (req, res, next) => {
 const recordAttendance = async (req, res, next) => {
   try {
     const { member_id, date, status } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if member exists
+    // Check if member exists and belongs to the gym
     const { data: member, error: memberError } = await supabaseClient
       .from('members')
       .select('id')
       .eq('id', member_id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (memberError || !member) {
@@ -82,6 +89,7 @@ const recordAttendance = async (req, res, next) => {
       .select('id')
       .eq('member_id', member_id)
       .eq('date', date)
+      .eq('gym_id', gym_id)
       .single();
     
     if (existingAttendance) {
@@ -90,6 +98,7 @@ const recordAttendance = async (req, res, next) => {
         .from('attendance')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', existingAttendance.id)
+        .eq('gym_id', gym_id)
         .select()
         .single();
       
@@ -110,7 +119,7 @@ const recordAttendance = async (req, res, next) => {
     // Create new attendance record
     const { data, error } = await supabaseClient
       .from('attendance')
-      .insert([{ member_id, date, status }])
+      .insert([{ member_id, date, status, gym_id }])
       .select()
       .single();
     
@@ -138,12 +147,14 @@ const recordAttendance = async (req, res, next) => {
 const recordBatchAttendance = async (req, res, next) => {
   try {
     const { batch_id, date, attendanceData } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if batch exists
+    // Check if batch exists and belongs to the gym
     const { data: batch, error: batchError } = await supabaseClient
       .from('batches')
       .select('id')
       .eq('id', batch_id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (batchError || !batch) {
@@ -158,6 +169,7 @@ const recordBatchAttendance = async (req, res, next) => {
       .from('members')
       .select('id')
       .eq('batch_id', batch_id)
+      .eq('gym_id', gym_id)
       .eq('status', 'active');
     
     if (membersError) {
@@ -171,7 +183,8 @@ const recordBatchAttendance = async (req, res, next) => {
     const attendanceRecords = attendanceData.map(item => ({
       member_id: item.member_id,
       date,
-      status: item.status
+      status: item.status,
+      gym_id
     }));
     
     // Insert or update attendance records
@@ -210,6 +223,7 @@ const recordBatchAttendance = async (req, res, next) => {
 const getAttendanceReport = async (req, res, next) => {
   try {
     const { member_id, start_date, end_date } = req.query;
+    const gym_id = req.user.gym_id;
     
     if (!start_date || !end_date) {
       return res.status(400).json({
@@ -221,7 +235,11 @@ const getAttendanceReport = async (req, res, next) => {
     // Build query
     let query = supabaseClient
       .from('attendance')
-      .select('*, members(id, name)');
+      .select(`
+        *,
+        members!inner(id, name)
+      `)
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (member_id) {
@@ -248,13 +266,24 @@ const getAttendanceReport = async (req, res, next) => {
         startDate: start_date,
         endDate: end_date
       },
-      totalDays: data.length,
-      presentCount: data.filter(record => record.status === 'present').length,
-      absentCount: data.filter(record => record.status === 'absent').length,
-      attendancePercentage: data.length > 0 
-        ? (data.filter(record => record.status === 'present').length / data.length) * 100 
-        : 0,
-      records: data
+      totalDays: Math.ceil((new Date(end_date) - new Date(start_date)) / (1000 * 60 * 60 * 24)) + 1,
+      attendance: {
+        present: data.filter(record => record.status === 'present').length,
+        absent: data.filter(record => record.status === 'absent').length,
+        late: data.filter(record => record.status === 'late').length
+      },
+      dailyAttendance: data.reduce((acc, record) => {
+        const date = formatDate(record.date);
+        if (!acc[date]) {
+          acc[date] = {
+            present: 0,
+            absent: 0,
+            late: 0
+          };
+        }
+        acc[date][record.status]++;
+        return acc;
+      }, {})
     };
     
     res.status(200).json({

@@ -138,7 +138,8 @@ const verifyAndRegister = async (req, res, next) => {
           phone,
           gym_name: gymName,
           country,
-          role: 'staff'
+          role: 'staff',
+          gym_id: authData.user.id // Set gym_id to user's own ID for gym owners
         }
       ])
       .select();
@@ -164,7 +165,8 @@ const verifyAndRegister = async (req, res, next) => {
       message: 'User registered successfully',
       data: {
         id: authData.user.id,
-        email: authData.user.email
+        email: authData.user.email,
+        gym_id: authData.user.id
       }
     });
   } catch (error) {

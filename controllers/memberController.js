@@ -9,9 +9,17 @@ const getAllMembers = async (req, res, next) => {
   try {
     const { status, search, batch_id } = req.query;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
     // Build query
-    let query = supabaseClient.from('members').select('*', { count: 'exact' });
+    let query = supabaseClient
+      .from('members')
+      .select(`
+        *,
+        batches:batch_id(id, name, schedule_time),
+        plans:plan_id(id, name, duration_in_months, price)
+      `, { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (status) {
@@ -54,14 +62,17 @@ const getAllMembers = async (req, res, next) => {
 const getMemberById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('members')
       .select(`
         *,
-        batches:batch_id(id, name, schedule_time)
+        batches:batch_id(id, name, schedule_time),
+        plans:plan_id(id, name, duration_in_months, price)
       `)
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
@@ -90,6 +101,36 @@ const createMember = async (req, res, next) => {
       name, phone, email, dob, gender, 
       status = 'active', batch_id, plan_id 
     } = req.body;
+    const gym_id = req.user.gym_id;
+    
+    // Verify batch and plan belong to the same gym
+    const { data: batchData, error: batchError } = await supabaseClient
+      .from('batches')
+      .select('id')
+      .eq('id', batch_id)
+      .eq('gym_id', gym_id)
+      .single();
+      
+    if (batchError || !batchData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid batch selected'
+      });
+    }
+    
+    const { data: planData, error: planError } = await supabaseClient
+      .from('plans')
+      .select('id')
+      .eq('id', plan_id)
+      .eq('gym_id', gym_id)
+      .single();
+      
+    if (planError || !planData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid plan selected'
+      });
+    }
     
     const newMember = {
       name,
@@ -100,6 +141,7 @@ const createMember = async (req, res, next) => {
       status,
       batch_id,
       plan_id,
+      gym_id,
       join_date: new Date().toISOString()
     };
     
@@ -134,12 +176,14 @@ const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, phone, email, dob, gender, status, batch_id, plan_id } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if member exists
+    // Check if member exists and belongs to the gym
     const { data: existingMember, error: findError } = await supabaseClient
       .from('members')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingMember) {
@@ -147,6 +191,39 @@ const updateMember = async (req, res, next) => {
         success: false,
         message: 'Member not found'
       });
+    }
+    
+    // Verify new batch and plan belong to the same gym
+    if (batch_id) {
+      const { data: batchData, error: batchError } = await supabaseClient
+        .from('batches')
+        .select('id')
+        .eq('id', batch_id)
+        .eq('gym_id', gym_id)
+        .single();
+        
+      if (batchError || !batchData) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid batch selected'
+        });
+      }
+    }
+    
+    if (plan_id) {
+      const { data: planData, error: planError } = await supabaseClient
+        .from('plans')
+        .select('id')
+        .eq('id', plan_id)
+        .eq('gym_id', gym_id)
+        .single();
+        
+      if (planError || !planData) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid plan selected'
+        });
+      }
     }
     
     // Update member
@@ -164,6 +241,7 @@ const updateMember = async (req, res, next) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -191,12 +269,14 @@ const updateMember = async (req, res, next) => {
 const deleteMember = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
-    // Check if member exists
+    // Check if member exists and belongs to the gym
     const { data: existingMember, error: findError } = await supabaseClient
       .from('members')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingMember) {
@@ -210,7 +290,8 @@ const deleteMember = async (req, res, next) => {
     const { error } = await supabaseClient
       .from('members')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
     if (error) {
       return res.status(400).json({

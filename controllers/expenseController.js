@@ -9,9 +9,13 @@ const getAllExpenses = async (req, res, next) => {
   try {
     const { start_date, end_date, search } = req.query;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
     // Build query
-    let query = supabaseClient.from('expenses').select('*', { count: 'exact' });
+    let query = supabaseClient
+      .from('expenses')
+      .select('*', { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (start_date) {
@@ -54,11 +58,13 @@ const getAllExpenses = async (req, res, next) => {
 const getExpenseById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('expenses')
       .select('*')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
@@ -84,10 +90,11 @@ const getExpenseById = async (req, res, next) => {
 const createExpense = async (req, res, next) => {
   try {
     const { title, amount, date = new Date().toISOString(), notes } = req.body;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('expenses')
-      .insert([{ title, amount, date, notes }])
+      .insert([{ title, amount, date, notes, gym_id }])
       .select()
       .single();
     
@@ -116,12 +123,14 @@ const updateExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { title, amount, date, notes } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if expense exists
+    // Check if expense exists and belongs to the gym
     const { data: existingExpense, error: findError } = await supabaseClient
       .from('expenses')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingExpense) {
@@ -142,6 +151,7 @@ const updateExpense = async (req, res, next) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -169,12 +179,14 @@ const updateExpense = async (req, res, next) => {
 const deleteExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
-    // Check if expense exists
+    // Check if expense exists and belongs to the gym
     const { data: existingExpense, error: findError } = await supabaseClient
       .from('expenses')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingExpense) {
@@ -188,7 +200,8 @@ const deleteExpense = async (req, res, next) => {
     const { error } = await supabaseClient
       .from('expenses')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
     if (error) {
       return res.status(400).json({
@@ -213,6 +226,7 @@ const deleteExpense = async (req, res, next) => {
 const getExpenseSummary = async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
+    const gym_id = req.user.gym_id;
     
     if (!start_date || !end_date) {
       return res.status(400).json({
@@ -225,6 +239,7 @@ const getExpenseSummary = async (req, res, next) => {
     const { data, error } = await supabaseClient
       .from('expenses')
       .select('*')
+      .eq('gym_id', gym_id)
       .gte('date', start_date)
       .lte('date', end_date)
       .order('date', { ascending: true });
@@ -249,29 +264,32 @@ const getExpenseSummary = async (req, res, next) => {
       return acc;
     }, {});
     
-    // Convert to array for chart data
-    const chartData = Object.entries(expensesByDate).map(([date, amount]) => ({
-      date,
-      amount
-    }));
-    
-    // Calculate average daily expense
-    const days = Object.keys(expensesByDate).length || 1;
-    const averageDailyExpense = totalExpenses / days;
+    // Group expenses by category
+    const expensesByCategory = data.reduce((acc, expense) => {
+      const category = expense.category || 'Uncategorized';
+      if (!acc[category]) {
+        acc[category] = 0;
+      }
+      acc[category] += parseFloat(expense.amount);
+      return acc;
+    }, {});
     
     res.status(200).json({
       success: true,
       data: {
-        summary: {
-          period: {
-            start_date,
-            end_date
-          },
-          total_expenses: totalExpenses,
-          average_daily_expense: averageDailyExpense,
-          total_transactions: data.length
+        period: {
+          startDate: start_date,
+          endDate: end_date
         },
-        chart_data: chartData
+        totalExpenses,
+        expensesByDate: Object.entries(expensesByDate).map(([date, amount]) => ({
+          date,
+          amount
+        })),
+        expensesByCategory: Object.entries(expensesByCategory).map(([category, amount]) => ({
+          category,
+          amount
+        }))
       }
     });
   } catch (error) {

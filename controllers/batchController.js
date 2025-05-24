@@ -9,9 +9,16 @@ const getAllBatches = async (req, res, next) => {
   try {
     const pagination = getPaginationParams(req);
     const { search } = req.query;
+    const gym_id = req.user.gym_id;
     
     // Build query
-    let query = supabaseClient.from('batches').select('*', { count: 'exact' });
+    let query = supabaseClient
+      .from('batches')
+      .select(`
+        *,
+        members:members!batch_id(count)
+      `, { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply search filter if provided
     if (search) {
@@ -46,11 +53,16 @@ const getAllBatches = async (req, res, next) => {
 const getBatchById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('batches')
-      .select('*')
+      .select(`
+        *,
+        members:members!batch_id(count)
+      `)
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
@@ -76,10 +88,15 @@ const getBatchById = async (req, res, next) => {
 const createBatch = async (req, res, next) => {
   try {
     const { name, schedule_time } = req.body;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('batches')
-      .insert([{ name, schedule_time }])
+      .insert([{ 
+        name, 
+        schedule_time,
+        gym_id 
+      }])
       .select()
       .single();
     
@@ -108,12 +125,14 @@ const updateBatch = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, schedule_time } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if batch exists
+    // Check if batch exists and belongs to the gym
     const { data: existingBatch, error: findError } = await supabaseClient
       .from('batches')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingBatch) {
@@ -126,8 +145,13 @@ const updateBatch = async (req, res, next) => {
     // Update batch
     const { data, error } = await supabaseClient
       .from('batches')
-      .update({ name, schedule_time, updated_at: new Date().toISOString() })
+      .update({ 
+        name, 
+        schedule_time, 
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -155,12 +179,14 @@ const updateBatch = async (req, res, next) => {
 const deleteBatch = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
-    // Check if batch exists
+    // Check if batch exists and belongs to the gym
     const { data: existingBatch, error: findError } = await supabaseClient
       .from('batches')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingBatch) {
@@ -175,6 +201,7 @@ const deleteBatch = async (req, res, next) => {
       .from('members')
       .select('id')
       .eq('batch_id', id)
+      .eq('gym_id', gym_id)
       .limit(1);
     
     if (!memberError && members.length > 0) {
@@ -188,7 +215,8 @@ const deleteBatch = async (req, res, next) => {
     const { error } = await supabaseClient
       .from('batches')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
     if (error) {
       return res.status(400).json({
@@ -214,12 +242,14 @@ const getBatchMembers = async (req, res, next) => {
   try {
     const { id } = req.params;
     const pagination = getPaginationParams(req);
+    const gym_id = req.user.gym_id;
     
-    // Check if batch exists
+    // Check if batch exists and belongs to the gym
     const { data: existingBatch, error: findError } = await supabaseClient
       .from('batches')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (findError || !existingBatch) {
@@ -232,8 +262,12 @@ const getBatchMembers = async (req, res, next) => {
     // Get members in the batch
     const { data, error, count } = await supabaseClient
       .from('members')
-      .select('*', { count: 'exact' })
+      .select(`
+        *,
+        plans:plan_id(id, name, duration_in_months, price)
+      `, { count: 'exact' })
       .eq('batch_id', id)
+      .eq('gym_id', gym_id)
       .range(pagination.startIndex, pagination.startIndex + pagination.limit - 1)
       .order('name', { ascending: true });
     

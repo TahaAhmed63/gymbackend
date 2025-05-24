@@ -7,11 +7,14 @@ const { getPaginationParams, paginatedResponse } = require('../utils/pagination'
  */
 const getAllStaff = async (req, res, next) => {
   try {
-    const { role, search } = req.query;
-    const pagination = getPaginationParams(req);
+    const { role, search, page = 1, limit = 10 } = req.query;
+    const gym_id = req.user.gym_id;
     
     // Build query
-    let query = supabaseClient.from('staff').select('*', { count: 'exact' });
+    let query = supabaseClient
+      .from('staff')
+      .select('*', { count: 'exact' })
+      .eq('gym_id', gym_id);
     
     // Apply filters
     if (role) {
@@ -24,8 +27,8 @@ const getAllStaff = async (req, res, next) => {
     
     // Apply pagination
     const { data, error, count } = await query
-      .range(pagination.startIndex, pagination.startIndex + pagination.limit - 1)
-      .order('name', { ascending: true });
+      .order('name')
+      .range((page - 1) * limit, page * limit - 1);
     
     if (error) {
       return res.status(400).json({
@@ -36,7 +39,15 @@ const getAllStaff = async (req, res, next) => {
     
     res.status(200).json({
       success: true,
-      ...paginatedResponse(data, count, pagination)
+      data: {
+        staff: data,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(count / limit)
+        }
+      }
     });
   } catch (error) {
     next(error);
@@ -50,14 +61,23 @@ const getAllStaff = async (req, res, next) => {
 const getStaffById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const gym_id = req.user.gym_id;
     
     const { data, error } = await supabaseClient
       .from('staff')
       .select('*')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
     if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    if (!data) {
       return res.status(404).json({
         success: false,
         message: 'Staff not found'
@@ -80,6 +100,14 @@ const getStaffById = async (req, res, next) => {
 const createStaff = async (req, res, next) => {
   try {
     const { name, email, phone, role, permissions } = req.body;
+    const gym_id = req.user.gym_id;
+    
+    if (!name || !email || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email and role are required'
+      });
+    }
     
     // Check if user account exists or create one
     let userId;
@@ -120,7 +148,8 @@ const createStaff = async (req, res, next) => {
             name,
             email,
             phone,
-            role: role.toLowerCase()
+            role: role.toLowerCase(),
+            gym_id
           }
         ]);
       
@@ -145,7 +174,8 @@ const createStaff = async (req, res, next) => {
           email,
           phone,
           role,
-          permissions
+          permissions,
+          gym_id
         }
       ])
       .select()
@@ -160,7 +190,6 @@ const createStaff = async (req, res, next) => {
     
     res.status(201).json({
       success: true,
-      message: 'Staff created successfully',
       data
     });
   } catch (error) {
@@ -176,15 +205,17 @@ const updateStaff = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, phone, role, permissions } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if staff exists
-    const { data: existingStaff, error: findError } = await supabaseClient
+    // Check if staff exists and belongs to the gym
+    const { data: existingStaff, error: checkError } = await supabaseClient
       .from('staff')
       .select('id, user_id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
-    if (findError || !existingStaff) {
+    if (checkError || !existingStaff) {
       return res.status(404).json({
         success: false,
         message: 'Staff not found'
@@ -194,14 +225,15 @@ const updateStaff = async (req, res, next) => {
     // Update staff record
     const { data, error } = await supabaseClient
       .from('staff')
-      .update({ 
-        name, 
-        phone, 
-        role, 
+      .update({
+        name,
+        phone,
+        role,
         permissions,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -216,18 +248,18 @@ const updateStaff = async (req, res, next) => {
     if (existingStaff.user_id) {
       await supabaseClient
         .from('users')
-        .update({ 
-          name, 
-          phone, 
+        .update({
+          name,
+          phone,
           role: role.toLowerCase(),
           updated_at: new Date().toISOString()
         })
-        .eq('id', existingStaff.user_id);
+        .eq('id', existingStaff.user_id)
+        .eq('gym_id', gym_id);
     }
     
     res.status(200).json({
       success: true,
-      message: 'Staff updated successfully',
       data
     });
   } catch (error) {
@@ -243,15 +275,17 @@ const deleteStaff = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { deleteUser = false } = req.body;
+    const gym_id = req.user.gym_id;
     
-    // Check if staff exists
-    const { data: existingStaff, error: findError } = await supabaseClient
+    // Check if staff exists and belongs to the gym
+    const { data: existingStaff, error: checkError } = await supabaseClient
       .from('staff')
       .select('id, user_id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
-    if (findError || !existingStaff) {
+    if (checkError || !existingStaff) {
       return res.status(404).json({
         success: false,
         message: 'Staff not found'
@@ -259,20 +293,29 @@ const deleteStaff = async (req, res, next) => {
     }
     
     // Delete staff record
-    const { error } = await supabaseClient
+    const { error: deleteError } = await supabaseClient
       .from('staff')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('gym_id', gym_id);
     
-    if (error) {
+    if (deleteError) {
       return res.status(400).json({
         success: false,
-        message: error.message
+        message: deleteError.message
       });
     }
     
-    // Delete user account if requested and user_id exists
+    // Delete user account if requested
     if (deleteUser && existingStaff.user_id) {
+      // Delete user profile
+      await supabaseClient
+        .from('users')
+        .delete()
+        .eq('id', existingStaff.user_id)
+        .eq('gym_id', gym_id);
+      
+      // Delete auth user
       await supabaseAdmin.auth.admin.deleteUser(existingStaff.user_id);
     }
     
@@ -293,6 +336,7 @@ const updateStaffPermissions = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { permissions } = req.body;
+    const gym_id = req.user.gym_id;
     
     if (!permissions) {
       return res.status(400).json({
@@ -301,28 +345,30 @@ const updateStaffPermissions = async (req, res, next) => {
       });
     }
     
-    // Check if staff exists
-    const { data: existingStaff, error: findError } = await supabaseClient
+    // Check if staff exists and belongs to the gym
+    const { data: existingStaff, error: checkError } = await supabaseClient
       .from('staff')
       .select('id')
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .single();
     
-    if (findError || !existingStaff) {
+    if (checkError || !existingStaff) {
       return res.status(404).json({
         success: false,
         message: 'Staff not found'
       });
     }
     
-    // Update staff permissions
+    // Update permissions
     const { data, error } = await supabaseClient
       .from('staff')
-      .update({ 
+      .update({
         permissions,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('gym_id', gym_id)
       .select()
       .single();
     
@@ -335,7 +381,6 @@ const updateStaffPermissions = async (req, res, next) => {
     
     res.status(200).json({
       success: true,
-      message: 'Staff permissions updated successfully',
       data
     });
   } catch (error) {
