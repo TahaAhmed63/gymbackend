@@ -9,7 +9,7 @@ const getAllMembers = async (req, res, next) => {
   try {
     const { status, search, batch_id } = req.query;
     const pagination = getPaginationParams(req);
-    const gym_id = req.user.gym_id;
+    const gym_id = req.users.gym_id;
     
     // Build query
     let query = supabaseClient
