@@ -11,7 +11,7 @@ const otpStore = new Map();
 const initiateRegistration = async (req, res, next) => {
   try {
     const { name, email, phone, password, gymName, country } = req.body;
-    
+    console.log(req.body,"req.body")
     // Check if user already exists
     const { data: existingUser } = await supabaseClient
       .from('users')
