@@ -28,7 +28,7 @@ const initiateRegistration = async (req, res, next) => {
 
     // Generate and send OTP
     const otp = generateOTP();
-    console.log('Generated OTP:', otp); // Debug log
+    console.log('Generated OTP:', otp);
     const emailSent = await sendOTPEmail(email, otp);
 
     if (!emailSent) {
@@ -45,7 +45,6 @@ const initiateRegistration = async (req, res, next) => {
       timestamp: Date.now()
     });
 
-    // Debug log
     console.log('Stored OTP data:', {
       email,
       storedOtp: otp,
@@ -57,6 +56,7 @@ const initiateRegistration = async (req, res, next) => {
       message: 'OTP sent successfully'
     });
   } catch (error) {
+    console.error('Initiate registration error:', error);
     next(error);
   }
 };
@@ -68,13 +68,13 @@ const initiateRegistration = async (req, res, next) => {
 const verifyAndRegister = async (req, res, next) => {
   try {
     const { email, otp } = req.body;
-    console.log('Verification attempt:', { email, receivedOtp: otp }); // Debug log
+    console.log('Verification attempt:', { email, receivedOtp: otp });
 
     // Get stored registration data
     const storedData = otpStore.get(email);
     
     if (!storedData) {
-      console.log('No stored data found for email:', email); // Debug log
+      console.log('No stored data found for email:', email);
       return res.status(400).json({
         success: false,
         message: 'Registration session expired or invalid'
@@ -83,7 +83,7 @@ const verifyAndRegister = async (req, res, next) => {
 
     // Check OTP expiration (10 minutes)
     const timeElapsed = Date.now() - storedData.timestamp;
-    console.log('Time elapsed since OTP generation:', timeElapsed / 1000, 'seconds'); // Debug log
+    console.log('Time elapsed since OTP generation:', timeElapsed / 1000, 'seconds');
 
     if (timeElapsed > 10 * 60 * 1000) {
       otpStore.delete(email);
@@ -98,7 +98,7 @@ const verifyAndRegister = async (req, res, next) => {
       received: otp,
       stored: storedData.otp,
       match: otp === storedData.otp
-    }); // Debug log
+    });
 
     if (otp !== storedData.otp) {
       return res.status(400).json({
@@ -109,6 +109,7 @@ const verifyAndRegister = async (req, res, next) => {
 
     const { name, phone, password, gymName, country } = storedData.data;
 
+    console.log('Creating Supabase auth user...');
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabaseClient.auth.signUp({
       email,
@@ -116,12 +117,16 @@ const verifyAndRegister = async (req, res, next) => {
     });
     
     if (authError) {
+      console.error('Supabase auth error:', authError);
       return res.status(400).json({
         success: false,
         message: authError.message
       });
     }
+
+    console.log('Auth user created:', authData);
     
+    console.log('Creating user profile...');
     // Create user profile in users table
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
@@ -135,9 +140,11 @@ const verifyAndRegister = async (req, res, next) => {
           country,
           role: 'staff'
         }
-      ]);
+      ])
+      .select();
     
     if (userError) {
+      console.error('User profile creation error:', userError);
       // Rollback: Delete the auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       
@@ -146,6 +153,8 @@ const verifyAndRegister = async (req, res, next) => {
         message: userError.message
       });
     }
+
+    console.log('User profile created:', userData);
 
     // Clear stored data
     otpStore.delete(email);
@@ -159,6 +168,7 @@ const verifyAndRegister = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('Verify and register error:', error);
     next(error);
   }
 };
