@@ -79,7 +79,7 @@ const verifyAndRegister = async (req, res, next) => {
         message: 'OTP expired'
       });
     }
-
+console.log(storedData.otp,otp,"sstoreddataotp")
     // Verify OTP
     if (storedData.otp !== otp) {
       return res.status(400).json({
