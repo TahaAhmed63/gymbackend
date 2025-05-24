@@ -11,7 +11,7 @@ const getAllPayments = async (req, res, next) => {
     const { member_id, start_date, end_date } = req.query;
     const pagination = getPaginationParams(req);
     const gym_id = req.user.gym_id;
-    
+    console.log(gym_id,"gym_id")
     // Build query
     let query = supabaseClient
       .from('payments')
