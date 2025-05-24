@@ -27,27 +27,9 @@ const authenticate = async (req, res, next) => {
         message: 'Invalid or expired token' 
       });
     }
-
-    // Get user profile data including gym_id
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError) {
-      return res.status(401).json({
-        success: false,
-        message: 'Error fetching user profile'
-      });
-    }
-
-    // Attach the user and profile data to the request object
-    req.user = {
-      ...user,
-      ...profile
-    };
     
+    // Attach the user to the request object
+    req.user = user;
     next();
   } catch (error) {
     next(error);
