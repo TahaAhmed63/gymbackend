@@ -1,13 +1,95 @@
 const { supabaseClient, supabaseAdmin } = require('../config/supabase');
+const { generateOTP, sendOTPEmail } = require('../utils/emailService');
+
+// Store OTPs temporarily (in production, use Redis or similar)
+const otpStore = new Map();
 
 /**
- * Register a new user
- * @route POST /api/auth/register
+ * Initiate registration process
+ * @route POST /api/auth/register/initiate
  */
-const register = async (req, res, next) => {
+const initiateRegistration = async (req, res, next) => {
   try {
-    const { name, email, phone, password, role = 'staff' } = req.body;
+    const { name, email, phone, password, gymName, country } = req.body;
     
+    // Check if user already exists
+    const { data: existingUser } = await supabaseClient
+      .from('users')
+      .select('email')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email already exists'
+      });
+    }
+
+    // Generate and send OTP
+    const otp = generateOTP();
+    const emailSent = await sendOTPEmail(email, otp);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send verification email'
+      });
+    }
+
+    // Store registration data and OTP
+    otpStore.set(email, {
+      otp,
+      data: { name, email, phone, password, gymName, country },
+      timestamp: Date.now()
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Complete registration with OTP verification
+ * @route POST /api/auth/register/verify
+ */
+const verifyAndRegister = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    // Get stored registration data
+    const storedData = otpStore.get(email);
+    
+    if (!storedData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Registration session expired or invalid'
+      });
+    }
+
+    // Check OTP expiration (10 minutes)
+    if (Date.now() - storedData.timestamp > 10 * 60 * 1000) {
+      otpStore.delete(email);
+      return res.status(400).json({
+        success: false,
+        message: 'OTP expired'
+      });
+    }
+
+    // Verify OTP
+    if (storedData.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP'
+      });
+    }
+
+    const { name, phone, password, gymName, country } = storedData.data;
+
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabaseClient.auth.signUp({
       email,
@@ -30,7 +112,9 @@ const register = async (req, res, next) => {
           name,
           email,
           phone,
-          role
+          gym_name: gymName,
+          country,
+          role: 'staff'
         }
       ]);
     
@@ -43,6 +127,9 @@ const register = async (req, res, next) => {
         message: userError.message
       });
     }
+
+    // Clear stored data
+    otpStore.delete(email);
     
     res.status(201).json({
       success: true,
@@ -169,7 +256,8 @@ const getCurrentUser = async (req, res, next) => {
 };
 
 module.exports = {
-  register,
+  initiateRegistration,
+  verifyAndRegister,
   login,
   logout,
   getCurrentUser

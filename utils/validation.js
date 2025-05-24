@@ -17,7 +17,9 @@ const userValidation = [
   body('name').notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Must be a valid email address'),
   body('phone').notEmpty().withMessage('Phone number is required'),
-  body('role').isIn(['admin', 'staff', 'trainer']).withMessage('Invalid role')
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+  body('gymName').notEmpty().withMessage('Gym name is required'),
+  body('country').notEmpty().withMessage('Country is required')
 ];
 
 const memberValidation = [

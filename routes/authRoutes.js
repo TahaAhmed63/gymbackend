@@ -4,8 +4,11 @@ const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const { validate, userValidation } = require('../utils/validation');
 
-// Register user
-router.post('/register', userValidation, validate, authController.register);
+// Initiate registration process
+router.post('/register/initiate', userValidation, validate, authController.initiateRegistration);
+
+// Complete registration with OTP verification
+router.post('/register/verify', authController.verifyAndRegister);
 
 // Login user
 router.post('/login', authController.login);
