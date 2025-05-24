@@ -38,7 +38,7 @@ const getAllMembers = async (req, res, next) => {
     const { data, error, count } = await query
       .range(pagination.startIndex, pagination.startIndex + pagination.limit - 1)
       .order('created_at', { ascending: false });
-    
+    console.log(data,error,"data erro")
     if (error) {
       return res.status(400).json({
         success: false,
