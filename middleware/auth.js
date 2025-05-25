@@ -27,11 +27,40 @@ const authenticate = async (req, res, next) => {
         message: 'Invalid or expired token' 
       });
     }
+
+    // Get user profile data from users table
+    const { data: userProfile, error: profileError } = await supabaseClient
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      return res.status(401).json({
+        success: false,
+        message: 'Error fetching user profile'
+      });
+    }
+
+    if (!userProfile) {
+      return res.status(401).json({
+        success: false,
+        message: 'User profile not found'
+      });
+    }
+
+    // Merge auth user data with profile data
+    req.user = {
+      ...user,
+      ...userProfile
+    };
+
+    console.log('Authenticated user data:', req.user); // Debug log
     
-    // Attach the user to the request object
-    req.user = user;
     next();
   } catch (error) {
+    console.error('Auth middleware error:', error);
     next(error);
   }
 };
