@@ -200,7 +200,7 @@ const login = async (req, res, next) => {
     // Get user role
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
-      .select('role, name','gym_id')
+      .select('role, name,gym_id')
       .eq('id', data.user.id)
       .single();
     console.log(userData)
