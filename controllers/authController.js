@@ -219,7 +219,8 @@ const login = async (req, res, next) => {
           id: data.user.id,
           email: data.user.email,
           name: userData.name,
-          role: userData.role
+          role: userData.role,
+          gym_id: userData.gym_id,
         },
         session: {
           access_token: data.session.access_token,
