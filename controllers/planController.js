@@ -95,6 +95,32 @@ const createPlan = async (req, res, next) => {
     } = req.body;
     console.log(req.body,"req.body")
     const gym_id = req.user.gym_id;
+console.log(gym_id,"gym_id")
+    // Validate gym_id
+    if (!gym_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'User does not have a valid gym_id'
+      });
+    }
+
+    // Verify gym_id exists in users table
+    const { data: gymUser, error: gymError } = await supabaseClient
+      .from('users')
+      .select('id')
+      .eq('id', gym_id)
+      .single();
+console.log(gymUser,"data")
+  
+  
+    
+    console.log('Inserting plan with data:', { 
+      name, 
+      duration_in_months, 
+      price,
+      description,
+      gym_id
+    });
     
     const { data, error } = await supabaseClient
       .from('plans')
@@ -108,7 +134,9 @@ const createPlan = async (req, res, next) => {
       .select()
       .single();
     
+    console.log('Query result:', { data, error });
     if (error) {
+      console.log(error,"error")
       return res.status(400).json({
         success: false,
         message: error.message

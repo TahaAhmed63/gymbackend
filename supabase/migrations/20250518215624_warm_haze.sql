@@ -107,12 +107,19 @@ CREATE TABLE IF NOT EXISTS plans (
   duration_in_months INTEGER NOT NULL,
   price DECIMAL(10, 2) NOT NULL,
   description TEXT,
+  gym_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Enable RLS on plans table
 ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Authenticated users can view plans" ON plans;
+DROP POLICY IF EXISTS "Admin and staff can create plans" ON plans;
+DROP POLICY IF EXISTS "Admin and staff can update plans" ON plans;
+DROP POLICY IF EXISTS "Admin can delete plans" ON plans;
 
 -- Policies for plans table
 CREATE POLICY "Authenticated users can view plans"
