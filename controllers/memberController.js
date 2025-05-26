@@ -10,7 +10,7 @@ const getAllMembers = async (req, res, next) => {
     const { status, search, batch_id } = req.query;
     const pagination = getPaginationParams(req);
     const gym_id = req.user.gym_id;
-    console.log(req.user,"gym_id")
+    console.log(req.user.gym_id,"gym_id")
     // Build query
     let query = supabaseClient  
       .from('members')
@@ -103,21 +103,7 @@ const createMember = async (req, res, next) => {
     } = req.body;
     const gym_id = req.user.gym_id;
     
-    // Verify batch and plan belong to the same gym
-    const { data: batchData, error: batchError } = await supabaseClient
-      .from('batches')
-      .select('id')
-      .eq('id', batch_id)
-      .eq('gym_id', gym_id)
-      .single();
-      
-    if (batchError || !batchData) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid batch selected'
-      });
-    }
-    
+    // Verify plan belongs to the same gym
     const { data: planData, error: planError } = await supabaseClient
       .from('plans')
       .select('id')
@@ -132,6 +118,23 @@ const createMember = async (req, res, next) => {
       });
     }
     
+    // Verify batch if provided
+    if (batch_id) {
+      const { data: batchData, error: batchError } = await supabaseClient
+        .from('batches')
+        .select('id')
+        .eq('id', batch_id)
+        .eq('gym_id', gym_id)
+        .single();
+        
+      if (batchError || !batchData) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid batch selected'
+        });
+      }
+    }
+    
     const newMember = {
       name,
       phone,
@@ -139,11 +142,15 @@ const createMember = async (req, res, next) => {
       dob,
       gender,
       status,
-      batch_id,
       plan_id,
       gym_id,
       join_date: new Date().toISOString()
     };
+    
+    // Only add batch_id if it was provided
+    if (batch_id) {
+      newMember.batch_id = batch_id;
+    }
     
     const { data, error } = await supabaseClient
       .from('members')
