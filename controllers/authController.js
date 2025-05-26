@@ -138,7 +138,7 @@ const verifyAndRegister = async (req, res, next) => {
           phone,
           gym_name: gymName,
           country,
-          role: 'staff',
+          role: 'admin',
           gym_id: authData.user.id // Set gym_id to user's own ID for gym owners
         }
       ])
