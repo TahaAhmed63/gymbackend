@@ -341,7 +341,7 @@ const getMemberPayments = async (req, res, next) => {
       .eq('id', member_id)
       .eq('gym_id', gym_id)
       .single();
-    
+    console.log(memberError)
     if (memberError || !member) {
       return res.status(404).json({
         success: false,
