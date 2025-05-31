@@ -326,26 +326,25 @@ const getPaymentSummary = async (req, res, next) => {
 
 /**
  * Get member payments
- * @route GET /api/payments/member/:member_id
+ * @route GET /api/payments/member/:memberId
  */
 const getMemberPayments = async (req, res, next) => {
   try {
-    const { member_id } = req.params;
+    const { memberId } = req.params;
     const pagination = getPaginationParams(req);
     const gym_id = req.user.gym_id;
-    
+    console.log(memberId,"memberId")
     // Check if member exists and belongs to the gym
     const { data: member, error: memberError } = await supabaseClient
       .from('members')
       .select('id')
-      .eq('id', member_id)
+      .eq('id', memberId)
       .eq('gym_id', gym_id)
       .single();
     console.log(memberError)
     if (memberError || !member) {
       console.log(memberError)
       return res.status(404).json({
-        
         success: false,
         message: 'Member not found'
       });
@@ -355,7 +354,7 @@ const getMemberPayments = async (req, res, next) => {
     const { data, error, count } = await supabaseClient
       .from('payments')
       .select('*', { count: 'exact' })
-      .eq('member_id', member_id)
+      .eq('member_id', memberId)
       .eq('gym_id', gym_id)
       .range(pagination.startIndex, pagination.startIndex + pagination.limit - 1)
       .order('payment_date', { ascending: false });
