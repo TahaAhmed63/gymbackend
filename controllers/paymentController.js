@@ -343,7 +343,9 @@ const getMemberPayments = async (req, res, next) => {
       .single();
     console.log(memberError)
     if (memberError || !member) {
+      console.log(memberError)
       return res.status(404).json({
+        
         success: false,
         message: 'Member not found'
       });
