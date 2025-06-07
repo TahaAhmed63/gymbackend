@@ -2,19 +2,19 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
-const { validate, userValidation } = require('../utils/validation');
+const { validate, userValidation, loginValidation } = require('../utils/validation');
 
 // Initiate registration process
-router.post('/register/initiate', userValidation, validate, authController.initiateRegistration);
+router.post('/register/initiate', validate(userValidation), authController.initiateRegistration);
 
 // Complete registration with OTP verification
-router.post('/register/verify', authController.verifyAndRegister);
+router.post('/register/verify', validate(userValidation), authController.verifyAndRegister);
 
 // Login user
-router.post('/login', authController.login);
+router.post('/login', validate(loginValidation), authController.login);
 
 // Logout user
-router.post('/logout', authController.logout);
+router.post('/logout', authenticate, authController.logout);
 
 // Get current user
 router.get('/me', authenticate, authController.getCurrentUser);
