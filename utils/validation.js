@@ -26,7 +26,7 @@ const validate = (schema) => async (req, res, next) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json(handleZodError(error));
-    }
+  }
     next(error);
   }
 };
