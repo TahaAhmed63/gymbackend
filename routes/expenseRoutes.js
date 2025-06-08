@@ -30,8 +30,7 @@ router.get('/:id',
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  expenseValidation,
-  validate,
+  validate(expenseValidation),
   expenseController.createExpense
 );
 
@@ -39,8 +38,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  expenseValidation,
-  validate,
+  validate(expenseValidation),
   expenseController.updateExpense
 );
 

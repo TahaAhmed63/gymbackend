@@ -18,8 +18,7 @@ router.get('/report', attendanceController.getAttendanceReport);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF, ROLES.TRAINER]),
-  attendanceValidation,
-  validate,
+  validate(attendanceValidation),
   attendanceController.recordAttendance
 );
 

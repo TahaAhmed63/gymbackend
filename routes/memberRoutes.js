@@ -18,8 +18,7 @@ router.get('/:id', memberController.getMemberById);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  memberValidation,
-  validate,
+  validate(memberValidation),
   memberController.createMember
 );
 
@@ -27,8 +26,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  memberValidation,
-  validate,
+  validate(memberValidation),
   memberController.updateMember
 );
 

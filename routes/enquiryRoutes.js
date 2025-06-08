@@ -18,8 +18,7 @@ router.get('/:id', enquiryController.getEnquiryById);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  enquiryValidation,
-  validate,
+  validate(enquiryValidation),
   enquiryController.createEnquiry
 );
 
@@ -27,8 +26,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  enquiryValidation,
-  validate,
+  validate(enquiryValidation),
   enquiryController.updateEnquiry
 );
 

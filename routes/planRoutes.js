@@ -18,8 +18,7 @@ router.get('/:id', planController.getPlanById);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  planValidation,
-  validate,
+  validate(planValidation),
   planController.createPlan
 );
 
@@ -27,8 +26,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  planValidation,
-  validate,
+  validate(planValidation),
   planController.updatePlan
 );
 

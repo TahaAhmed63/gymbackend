@@ -21,8 +21,7 @@ router.get('/:id/members', batchController.getBatchMembers);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  batchValidation,
-  validate,
+  validate(batchValidation),
   batchController.createBatch
 );
 
@@ -30,8 +29,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  batchValidation,
-  validate,
+  validate(batchValidation),
   batchController.updateBatch
 );
 

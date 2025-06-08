@@ -24,8 +24,7 @@ router.get('/:id', paymentController.getPaymentById);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  paymentValidation,
-  validate,
+  validate(paymentValidation),
   paymentController.createPayment
 );
 
@@ -33,8 +32,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  paymentValidation,
-  validate,
+  validate(paymentValidation),
   paymentController.updatePayment
 );
 

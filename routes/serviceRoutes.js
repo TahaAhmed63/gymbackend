@@ -18,8 +18,7 @@ router.get('/:id', serviceController.getServiceById);
 router.post(
   '/',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  serviceValidation,
-  validate,
+  validate(serviceValidation),
   serviceController.createService
 );
 
@@ -27,8 +26,7 @@ router.post(
 router.put(
   '/:id',
   checkRole([ROLES.ADMIN, ROLES.STAFF]),
-  serviceValidation,
-  validate,
+  validate(serviceValidation),
   serviceController.updateService
 );
 
