@@ -278,7 +278,7 @@ const getCurrentUser = async (req, res, next) => {
         message: 'User profile not found'
       });
     }
-    
+    Console.log(data,"data")
     res.status(200).json({
       success: true,
       data
