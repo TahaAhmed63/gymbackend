@@ -25,7 +25,6 @@ const errorHandler = require('./middleware/errorHandler');
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Apply middleware
 app.use(cors());
@@ -55,9 +54,12 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use(errorHandler);
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

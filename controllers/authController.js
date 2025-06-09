@@ -182,7 +182,8 @@ const verifyAndRegister = async (req, res, next) => {
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    console.log(email, password)
+    console.log('Login attempt for:', email);
+    
     // Authenticate with Supabase
     const { data, error } = await supabaseClient.auth.signInWithPassword({
       email,
@@ -190,24 +191,32 @@ const login = async (req, res, next) => {
     });
     
     if (error) {
-      console.log(error)
+      console.error('Login error:', error);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
     }
     
-    // Get user role
+    // Get user role and profile data
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
-      .select('role, name,gym_id')
+      .select('role, name, gym_id, country')
       .eq('id', data.user.id)
       .single();
-    console.log(userData)
+    
     if (userError) {
+      console.error('User profile error:', userError);
       return res.status(500).json({
         success: false,
         message: 'Error retrieving user profile'
+      });
+    }
+    
+    if (!userData) {
+      return res.status(404).json({
+        success: false,
+        message: 'User profile not found'
       });
     }
     
@@ -221,7 +230,7 @@ const login = async (req, res, next) => {
           name: userData.name,
           role: userData.role,
           gym_id: userData.gym_id,
-          country: userData.country,
+          country: userData.country
         },
         session: {
           access_token: data.session.access_token,
@@ -230,6 +239,7 @@ const login = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     next(error);
   }
 };
@@ -273,17 +283,21 @@ const getCurrentUser = async (req, res, next) => {
       .single();
     
     if (error) {
+      console.error('Get current user error:', error);
       return res.status(404).json({
         success: false,
         message: 'User profile not found'
       });
     }
-    Console.log(data,"data")
+    
+    console.log('Current user data:', data);
+    
     res.status(200).json({
       success: true,
       data
     });
   } catch (error) {
+    console.error('Get current user error:', error);
     next(error);
   }
 };
