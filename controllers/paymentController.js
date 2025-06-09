@@ -1,6 +1,7 @@
 const { supabaseClient } = require('../config/supabase');
 const { getPaginationParams, paginatedResponse } = require('../utils/pagination');
 const { calculateDueAmount } = require('../utils/helpers');
+const ExcelJS = require('exceljs');
 
 /**
  * Get all payments with pagination and filtering
@@ -375,6 +376,90 @@ const getMemberPayments = async (req, res, next) => {
   }
 };
 
+/**
+ * Export payments to Excel
+ * @route GET /api/payments/export
+ */
+const exportPaymentsToExcel = async (req, res, next) => {
+  try {
+    const { start_date, end_date } = req.query;
+    const gym_id = req.user.gym_id;
+    
+    // Build query
+    let query = supabaseClient
+      .from('payments')
+      .select(`
+        *,
+        members!inner(id, name, phone)
+      `)
+      .eq('gym_id', gym_id);
+    
+    // Apply date filters
+    if (start_date) {
+      query = query.gte('payment_date', start_date);
+    }
+    
+    if (end_date) {
+      query = query.lte('payment_date', end_date);
+    }
+    
+    const { data: payments, error } = await query.order('payment_date', { ascending: false });
+    
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    // Create a new workbook and worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Payments');
+    
+    // Add headers
+    worksheet.columns = [
+      { header: 'Date', key: 'date', width: 20 },
+      { header: 'Member Name', key: 'memberName', width: 30 },
+      { header: 'Phone', key: 'phone', width: 15 },
+      { header: 'Total Amount', key: 'totalAmount', width: 15 },
+      { header: 'Amount Paid', key: 'amountPaid', width: 15 },
+      { header: 'Due Amount', key: 'dueAmount', width: 15 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 15 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Notes', key: 'notes', width: 30 }
+    ];
+    
+    // Add rows
+    payments.forEach(payment => {
+      worksheet.addRow({
+        date: new Date(payment.payment_date).toLocaleDateString(),
+        memberName: payment.members.name,
+        phone: payment.members.phone,
+        totalAmount: payment.total_amount,
+        amountPaid: payment.amount_paid,
+        dueAmount: payment.due_amount,
+        paymentMethod: payment.payment_method,
+        status: payment.status,
+        notes: payment.notes
+      });
+    });
+    
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=payments.xlsx');
+    
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAllPayments,
   getPaymentById,
@@ -382,5 +467,6 @@ module.exports = {
   updatePayment,
   deletePayment,
   getPaymentSummary,
-  getMemberPayments
+  getMemberPayments,
+  exportPaymentsToExcel
 };

@@ -14,6 +14,9 @@ router.get('/', paymentController.getAllPayments);
 // Get payment summary
 router.get('/summary', paymentController.getPaymentSummary);
 
+// Export payments to Excel
+router.get('/export', paymentController.exportPaymentsToExcel);
+
 // Get payments by member
 router.get('/member/:memberId', paymentController.getMemberPayments);
 
