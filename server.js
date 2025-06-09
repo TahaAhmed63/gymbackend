@@ -27,11 +27,20 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 
 // Apply middleware
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -54,6 +63,11 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use(errorHandler);
 
+// Handle 404 routes
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
 // For local development
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3000;
@@ -62,4 +76,5 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+// Export the Express API
 module.exports = app;

@@ -75,10 +75,11 @@ const batchValidation = z.object({
 // Payment validation schemas
 const paymentValidation = z.object({
   body: z.object({
-    memberId: z.string().uuid('Invalid member ID'),
-    amount: z.number().positive('Amount must be positive'),
-    paymentMethod: z.enum(['cash', 'card', 'upi']),
-    planId: z.string().uuid('Invalid plan ID'),
+    member_id: z.string().uuid('Invalid member ID'),
+    amount_paid: z.number().positive('Amount paid must be positive'),
+    total_amount: z.number().positive('Total amount must be positive'),
+    payment_date: z.string(),
+    payment_method: z.enum(['cash', 'card', 'upi']),
     notes: z.string().optional(),
   }),
 });

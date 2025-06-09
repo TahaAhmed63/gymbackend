@@ -2,12 +2,21 @@
  * Global error handling middleware
  */
 const errorHandler = (err, req, res, next) => {
-  console.error(err.stack);
+  // Log the full error for debugging
+  console.error('Error details:', {
+    name: err.name,
+    message: err.message,
+    stack: err.stack,
+    code: err.code,
+    statusCode: err.statusCode
+  });
 
   // Default error response
   const errorResponse = {
     status: 'error',
-    message: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'production' 
+      ? 'Internal Server Error' 
+      : err.message || 'Internal Server Error',
     code: 'INTERNAL_SERVER_ERROR'
   };
 
@@ -47,6 +56,14 @@ const errorHandler = (err, req, res, next) => {
     errorResponse.code = 'DUPLICATE_ENTRY';
     errorResponse.message = 'Duplicate entry found';
     return res.status(409).json(errorResponse);
+  }
+
+  // Handle Supabase errors
+  if (err.name === 'PostgrestError') {
+    errorResponse.status = 'error';
+    errorResponse.code = 'DATABASE_ERROR';
+    errorResponse.message = err.message;
+    return res.status(500).json(errorResponse);
   }
 
   // Handle custom errors
