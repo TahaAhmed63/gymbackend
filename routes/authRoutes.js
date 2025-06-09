@@ -13,6 +13,9 @@ router.post('/register/verify', validate(userValidation), authController.verifyA
 // Login user
 router.post('/login', validate(loginValidation), authController.login);
 
+// Refresh token
+router.post('/refresh', authController.refreshToken);
+
 // Logout user
 router.post('/logout', authenticate, authController.logout);
 

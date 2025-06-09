@@ -234,6 +234,7 @@ const login = async (req, res, next) => {
         },
         session: {
           access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
           expires_at: data.session.expires_at
         }
       }
@@ -302,10 +303,54 @@ const getCurrentUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Refresh access token
+ * @route POST /api/auth/refresh
+ */
+const refreshToken = async (req, res, next) => {
+  try {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refresh token is required'
+      });
+    }
+
+    // Refresh the session using Supabase
+    const { data, error } = await supabaseClient.auth.refreshSession({
+      refresh_token
+    });
+
+    if (error) {
+      console.error('Token refresh error:', error);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid refresh token'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_at: data.session.expires_at
+      }
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   initiateRegistration,
   verifyAndRegister,
   login,
   logout,
-  getCurrentUser
+  getCurrentUser,
+  refreshToken
 };
