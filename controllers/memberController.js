@@ -316,10 +316,91 @@ const deleteMember = async (req, res, next) => {
   }
 };
 
+exports.checkMemberStatus = async (req, res) => {
+  try {
+    const { gym_id } = req.user;
+
+    // Get all active members
+    const { data: members, error: membersError } = await supabaseClient
+      .from('members')
+      .select(`
+        id,
+        name,
+        status,
+        plan_id,
+        plan_end_date,
+        payments (
+          id,
+          amount_paid,
+          due_amount,
+          payment_date
+        )
+      `)
+      .eq('gym_id', gym_id)
+      .eq('status', 'active');
+
+    if (membersError) {
+      throw membersError;
+    }
+
+    const today = new Date();
+    const updatedMembers = [];
+
+    for (const member of members) {
+      const planEndDate = new Date(member.plan_end_date);
+      
+      // Check if plan has expired
+      if (planEndDate < today) {
+        // Get the latest payment
+        const latestPayment = member.payments
+          .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
+
+        // If there's no payment or the latest payment has dues
+        if (!latestPayment || latestPayment.due_amount > 0) {
+          // Update member status to inactive
+          const { error: updateError } = await supabaseClient
+            .from('members')
+            .update({ status: 'inactive' })
+            .eq('id', member.id);
+
+          if (updateError) {
+            console.error(`Error updating member ${member.id}:`, updateError);
+            continue;
+          }
+
+          updatedMembers.push({
+            id: member.id,
+            name: member.name,
+            reason: 'Plan expired with unpaid dues'
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Member status check completed',
+      data: {
+        updatedMembers,
+        totalChecked: members.length,
+        totalUpdated: updatedMembers.length
+      }
+    });
+  } catch (error) {
+    console.error('Error checking member status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check member status',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllMembers,
   getMemberById,
   createMember,
   updateMember,
-  deleteMember
+  deleteMember,
+  checkMemberStatus
 };

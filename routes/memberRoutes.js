@@ -37,4 +37,7 @@ router.delete(
   memberController.deleteMember
 );
 
+// Check member status
+router.post('/check-status', memberController.checkMemberStatus);
+
 module.exports = router;

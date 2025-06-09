@@ -23,6 +23,9 @@ const reportRoutes = require('./routes/reportRoutes');
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
 
+// Import scheduled tasks
+require('./tasks/scheduledTasks');
+
 // Initialize Express app
 const app = express();
 
