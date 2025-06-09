@@ -316,7 +316,7 @@ const deleteMember = async (req, res, next) => {
   }
 };
 
-exports.checkMemberStatus = async (req, res) => {
+const checkMemberStatus = async (req, res) => {
   try {
     const { gym_id } = req.user;
 
