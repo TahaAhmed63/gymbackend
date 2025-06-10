@@ -106,7 +106,7 @@ const createMember = async (req, res, next) => {
     // Fetch plan and duration
     const { data: planData, error: planError } = await supabaseClient
       .from('plans')
-      .select('id, duration')  // fetch duration too
+      .select('id, duration_in_months')  // fetch duration too
       .eq('id', plan_id)
       .eq('gym_id', gym_id)
       .single();
