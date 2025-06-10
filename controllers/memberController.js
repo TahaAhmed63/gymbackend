@@ -111,7 +111,7 @@ const createMember = async (req, res, next) => {
       .eq('gym_id', gym_id)
       .single();
 
-    if (planError || !planData) {
+    if (plan_id) {
       return res.status(400).json({
         success: false,
         message: 'Invalid plan selected'
