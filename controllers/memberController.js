@@ -102,22 +102,22 @@ const createMember = async (req, res, next) => {
       status = 'active', batch_id, plan_id 
     } = req.body;
     const gym_id = req.user.gym_id;
-    
-    // Verify plan belongs to the same gym
+
+    // Fetch plan and duration
     const { data: planData, error: planError } = await supabaseClient
       .from('plans')
-      .select('id')
+      .select('id, duration')  // fetch duration too
       .eq('id', plan_id)
       .eq('gym_id', gym_id)
       .single();
-      
+
     if (planError || !planData) {
       return res.status(400).json({
         success: false,
         message: 'Invalid plan selected'
       });
     }
-    
+
     // Verify batch if provided
     if (batch_id) {
       const { data: batchData, error: batchError } = await supabaseClient
@@ -126,7 +126,7 @@ const createMember = async (req, res, next) => {
         .eq('id', batch_id)
         .eq('gym_id', gym_id)
         .single();
-        
+
       if (batchError || !batchData) {
         return res.status(400).json({
           success: false,
@@ -134,7 +134,11 @@ const createMember = async (req, res, next) => {
         });
       }
     }
-    
+
+    const joinDate = new Date();
+    const planEndDate = new Date(joinDate);
+    planEndDate.setMonth(planEndDate.getMonth() + planData.duration); // Add months
+
     const newMember = {
       name,
       phone,
@@ -144,27 +148,27 @@ const createMember = async (req, res, next) => {
       status,
       plan_id,
       gym_id,
-      join_date: new Date().toISOString()
+      join_date: joinDate.toISOString(),
+      plan_end_date: planEndDate.toISOString()  // Add plan end date
     };
-    
-    // Only add batch_id if it was provided
+
     if (batch_id) {
       newMember.batch_id = batch_id;
     }
-    
+
     const { data, error } = await supabaseClient
       .from('members')
       .insert([newMember])
       .select()
       .single();
-    
+
     if (error) {
       return res.status(400).json({
         success: false,
         message: error.message
       });
     }
-    
+
     res.status(201).json({
       success: true,
       message: 'Member created successfully',
@@ -174,6 +178,7 @@ const createMember = async (req, res, next) => {
     next(error);
   }
 };
+
 
 /**
  * Update a member
