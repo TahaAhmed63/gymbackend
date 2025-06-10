@@ -137,7 +137,7 @@ const createMember = async (req, res, next) => {
 
     const joinDate = new Date();
     const planEndDate = new Date(joinDate);
-    planEndDate.setMonth(planEndDate.getMonth() + planData.duration); // Add months
+    planEndDate.setMonth(planEndDate.getMonth() + planData.duration_in_months); // Add months
 
     const newMember = {
       name,
