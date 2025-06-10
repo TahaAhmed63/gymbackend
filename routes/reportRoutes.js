@@ -7,16 +7,16 @@ const { checkRole, ROLES } = require('../middleware/roleCheck');
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
-// Get expiring memberships report
-router.get('/expiring-memberships', 
+// Get expiring members
+router.get('/expiring', 
   checkRole([ROLES.ADMIN, ROLES.STAFF]), 
-  reportController.getExpiringMemberships
+  reportController.getExpiringMembers
 );
 
-// Get upcoming birthdays report
-router.get('/birthdays', 
+// Get birthday members
+router.get('/birthday', 
   checkRole([ROLES.ADMIN, ROLES.STAFF, ROLES.TRAINER]), 
-  reportController.getUpcomingBirthdays
+  reportController.getBirthdayMembers
 );
 
 // Get payment status report
@@ -35,6 +35,12 @@ router.get('/attendance-summary',
 router.get('/financial-summary', 
   checkRole([ROLES.ADMIN]), 
   reportController.getFinancialSummaryReport
+);
+
+// Download reports
+router.get('/download/:type', 
+  checkRole([ROLES.ADMIN, ROLES.STAFF]), 
+  reportController.downloadReport
 );
 
 module.exports = router;

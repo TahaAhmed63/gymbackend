@@ -1,48 +1,70 @@
 const { supabaseClient } = require('../config/supabase');
+const moment = require('moment');
+const { Parser } = require('json2csv');
 
 /**
  * Get expiring memberships
  * @route GET /api/reports/expiring-memberships
  */
-const getExpiringMemberships = async (req, res, next) => {
+const getExpiringMembers = async (req, res) => {
   try {
-    const { days = 15 } = req.query;
-    const gym_id = req.user.gym_id;
+    const { timeframe } = req.query;
+    let days;
     
-    // Call the stored function
-    const { data, error } = await supabaseClient.rpc('get_expiring_memberships', {
-      days_range: parseInt(days),
-      p_gym_id: gym_id
-    });
-    
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
+    // Convert timeframe to days
+    switch (timeframe) {
+      case '3days':
+        days = { start: 1, end: 3 };
+        break;
+      case '7days':
+        days = { start: 4, end: 7 };
+        break;
+      case '15days':
+        days = { start: 8, end: 15 };
+        break;
+      case '30days':
+        days = { start: 16, end: 30 };
+        break;
+      default:
+        days = { start: 1, end: 3 };
     }
     
-    // Group by expiry range
-    const ranges = {
-      critical: data.filter(item => item.days_remaining <= 3),
-      warning: data.filter(item => item.days_remaining > 3 && item.days_remaining <= 7),
-      upcoming: data.filter(item => item.days_remaining > 7)
-    };
+    const today = moment().startOf('day');
+    const endDate = moment().add(days.end, 'days').endOf('day');
+    const startDate = moment().add(days.start - 1, 'days').startOf('day');
     
-    res.status(200).json({
-      success: true,
-      data: {
-        ranges,
-        summary: {
-          total: data.length,
-          critical: ranges.critical.length,
-          warning: ranges.warning.length,
-          upcoming: ranges.upcoming.length
-        }
-      }
+    const { data: members, error } = await supabaseClient
+      .from('members')
+      .select(`
+        *,
+        plans:plan_id (
+          id,
+          name,
+          price
+        )
+      `)
+      .eq('status', 'active')
+      .gte('plan_end_date', startDate.toISOString())
+      .lte('plan_end_date', endDate.toISOString())
+      .order('plan_end_date', { ascending: true });
+    
+    if (error) {
+      throw error;
+    }
+    
+    // Calculate days remaining for each member
+    const membersWithDaysRemaining = members.map(member => {
+      const daysRemaining = moment(member.plan_end_date).diff(today, 'days');
+      return {
+        ...member,
+        days_remaining: daysRemaining
+      };
     });
+    
+    res.json(membersWithDaysRemaining);
   } catch (error) {
-    next(error);
+    console.error('Error fetching expiring members:', error);
+    res.status(500).json({ error: 'Failed to fetch expiring members' });
   }
 };
 
@@ -50,30 +72,53 @@ const getExpiringMemberships = async (req, res, next) => {
  * Get upcoming birthdays
  * @route GET /api/reports/birthdays
  */
-const getUpcomingBirthdays = async (req, res, next) => {
+const getBirthdayMembers = async (req, res) => {
   try {
-    const { days = 30 } = req.query;
-    const gym_id = req.user.gym_id;
+    const today = moment();
+    const thirtyDaysFromNow = moment().add(30, 'days');
     
-    // Call the stored function
-    const { data, error } = await supabaseClient.rpc('get_upcoming_birthdays', {
-      days_range: parseInt(days),
-      p_gym_id: gym_id
-    });
+    const { data: members, error } = await supabaseClient
+      .from('members')
+      .select(`
+        *,
+        plans:plan_id (
+          id,
+          name,
+          price
+        )
+      `)
+      .eq('status', 'active')
+      .not('dob', 'is', null);
     
     if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
+      throw error;
     }
     
-    res.status(200).json({
-      success: true,
-      data
-    });
+    // Filter and calculate days until birthday
+    const upcomingBirthdays = members
+      .map(member => {
+        const birthday = moment(member.dob);
+        const nextBirthday = moment(birthday).year(today.year());
+        
+        // If birthday has passed this year, get next year's birthday
+        if (nextBirthday.isBefore(today)) {
+          nextBirthday.add(1, 'year');
+        }
+        
+        const daysUntilBirthday = nextBirthday.diff(today, 'days');
+        
+        return {
+          ...member,
+          days_until_birthday: daysUntilBirthday
+        };
+      })
+      .filter(member => member.days_until_birthday <= 30)
+      .sort((a, b) => a.days_until_birthday - b.days_until_birthday);
+    
+    res.json(upcomingBirthdays);
   } catch (error) {
-    next(error);
+    console.error('Error fetching birthday members:', error);
+    res.status(500).json({ error: 'Failed to fetch birthday members' });
   }
 };
 
@@ -397,10 +442,94 @@ const getFinancialSummaryReport = async (req, res, next) => {
   }
 };
 
+// Download reports
+const downloadReport = async (req, res) => {
+  try {
+    const { type } = req.params;
+    let query = supabaseClient
+      .from('members')
+      .select(`
+        *,
+        plans:plan_id (
+          id,
+          name,
+          price
+        )
+      `);
+    
+    // Add filters based on report type
+    switch (type) {
+      case 'active':
+        query = query.eq('status', 'active');
+        break;
+      case 'inactive':
+        query = query.eq('status', 'inactive');
+        break;
+      case 'partial':
+        query = query.eq('payment_status', 'partial');
+        break;
+    }
+    
+    const { data: members, error } = await query;
+    
+    if (error) {
+      throw error;
+    }
+    
+    // Prepare data for CSV
+    const fields = [
+      'id',
+      'name',
+      'phone',
+      'email',
+      'dob',
+      'status',
+      'plan_end_date',
+      'payment_status',
+      'plan_name',
+      'plan_price'
+    ];
+    
+    const data = members.map(member => ({
+      id: member.id,
+      name: member.name,
+      phone: member.phone,
+      email: member.email,
+      dob: member.dob,
+      status: member.status,
+      plan_end_date: member.plan_end_date,
+      payment_status: member.payment_status,
+      plan_name: member.plans?.name || '',
+      plan_price: member.plans?.price || 0
+    }));
+    
+    // Convert to CSV
+    const csv = fields.join(',') + '\n' +
+      data.map(row => 
+        fields.map(field => {
+          const value = row[field];
+          return typeof value === 'string' && value.includes(',') 
+            ? `"${value}"` 
+            : value;
+        }).join(',')
+      ).join('\n');
+    
+    // Set headers for CSV download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${type}_members_report.csv`);
+    
+    res.send(csv);
+  } catch (error) {
+    console.error('Error generating report:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+};
+
 module.exports = {
-  getExpiringMemberships,
-  getUpcomingBirthdays,
+  getExpiringMembers,
+  getBirthdayMembers,
   getPaymentStatusReport,
   getAttendanceSummaryReport,
-  getFinancialSummaryReport
+  getFinancialSummaryReport,
+  downloadReport
 };
