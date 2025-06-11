@@ -88,7 +88,7 @@ const paymentValidation = z.object({
 const attendanceValidation = z.object({
   body: z.object({
     member_id: z.string().uuid('Invalid member ID'),
-    batch_id: z.string().uuid('Invalid batch ID'),
+    // batch_id: z.string().uuid('Invalid batch ID'),
     date: z.string(),
     status: z.enum(['present', 'absent', 'late']),
   }),
