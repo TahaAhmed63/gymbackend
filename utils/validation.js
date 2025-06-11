@@ -87,8 +87,8 @@ const paymentValidation = z.object({
 // Attendance validation schemas
 const attendanceValidation = z.object({
   body: z.object({
-    memberId: z.string().uuid('Invalid member ID'),
-    batchId: z.string().uuid('Invalid batch ID'),
+    member_id: z.string().uuid('Invalid member ID'),
+    batch_id: z.string().uuid('Invalid batch ID'),
     date: z.string(),
     status: z.enum(['present', 'absent', 'late']),
   }),
