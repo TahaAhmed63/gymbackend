@@ -94,6 +94,14 @@ const attendanceValidation = z.object({
   }),
 });
 
+// OTP verification validation schema
+const otpVerificationValidation = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format'),
+    otp: z.string().min(4, 'OTP must be at least 4 digits'),
+  }),
+});
+
 module.exports = {
   validate,
   userValidation,
@@ -102,4 +110,5 @@ module.exports = {
   batchValidation,
   paymentValidation,
   attendanceValidation,
+  otpVerificationValidation,
 };
