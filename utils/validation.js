@@ -65,8 +65,8 @@ const memberValidation = z.object({
 const batchValidation = z.object({
   body: z.object({
     name: z.string().min(2, 'Batch name must be at least 2 characters'),
-    startTime: z.string(),
-    endTime: z.string(),
+    schedule_time: z.string(),
+    // endTime: z.string(),
     // capacity: z.number().min(1, 'Capacity must be at least 1'),
     // trainerId: z.string().uuid('Invalid trainer ID'),
   }),
