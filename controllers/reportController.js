@@ -446,6 +446,7 @@ const getFinancialSummaryReport = async (req, res, next) => {
 const downloadReport = async (req, res) => {
   try {
     const { type } = req.params;
+    // 1. Fetch members (active/inactive as needed)
     let query = supabaseClient
       .from('members')
       .select(`
@@ -456,27 +457,52 @@ const downloadReport = async (req, res) => {
           price
         )
       `);
-    
-    // Add filters based on report type
-    switch (type) {
-      case 'active':
-        query = query.eq('status', 'active');
-        break;
-      case 'inactive':
-        query = query.eq('status', 'inactive');
-        break;
-      case 'partial':
-        query = query.eq('payment_status', 'partial');
-        break;
-    }
-    
+
+    if (type === 'active') query = query.eq('status', 'active');
+    if (type === 'inactive') query = query.eq('status', 'inactive');
+    // Do NOT filter by payment_status here
+
     const { data: members, error } = await query;
-    
-    if (error) {
-      throw error;
+    if (error) throw error;
+
+    // 2. Fetch payments for these members
+    const memberIds = members.map(m => m.id);
+    let payments = [];
+    if (memberIds.length > 0) {
+      const { data: paymentsData, error: paymentError } = await supabaseClient
+        .from('payments')
+        .select('member_id, due_amount, payment_date')
+        .in('member_id', memberIds)
+        .order('payment_date', { ascending: false });
+      if (paymentError) throw paymentError;
+      payments = paymentsData;
     }
-    
-    // Prepare data for CSV
+
+    // 3. Group payments by member
+    const paymentsByMember = payments.reduce((acc, payment) => {
+      if (!acc[payment.member_id]) acc[payment.member_id] = [];
+      acc[payment.member_id].push(payment);
+      return acc;
+    }, {});
+
+    // 4. Compute payment status for each member
+    const membersWithStatus = members.map(member => {
+      const memberPayments = paymentsByMember[member.id] || [];
+      const lastPayment = memberPayments.length > 0 ? memberPayments[0] : null;
+      let payment_status = 'no_payment';
+      if (lastPayment) {
+        payment_status = lastPayment.due_amount > 0 ? 'partial' : 'paid';
+      }
+      return { ...member, payment_status };
+    });
+
+    // 5. Filter by type if needed
+    let filteredMembers = membersWithStatus;
+    if (type === 'partial') {
+      filteredMembers = membersWithStatus.filter(m => m.payment_status === 'partial');
+    }
+
+    // 6. Prepare data for CSV (same as before)
     const fields = [
       'id',
       'name',
@@ -490,7 +516,7 @@ const downloadReport = async (req, res) => {
       'plan_price'
     ];
     
-    const data = members.map(member => ({
+    const data = filteredMembers.map(member => ({
       id: member.id,
       name: member.name,
       phone: member.phone,
