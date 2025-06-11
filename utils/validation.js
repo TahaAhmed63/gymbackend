@@ -102,6 +102,16 @@ const otpVerificationValidation = z.object({
   }),
 });
 
+// Plan validation schema
+const planValidation = z.object({
+  body: z.object({
+    name: z.string().min(2, 'Plan name must be at least 2 characters'),
+    duration_in_months: z.number().min(1, 'Duration must be at least 1 month'),
+    price: z.number().positive('Price must be positive'),
+    description: z.string().optional(),
+  }),
+});
+
 module.exports = {
   validate,
   userValidation,
@@ -111,4 +121,5 @@ module.exports = {
   paymentValidation,
   attendanceValidation,
   otpVerificationValidation,
+  planValidation,
 };
