@@ -193,7 +193,7 @@ const getPaymentStatusReport = async (req, res, next) => {
                         lastPayment.due_amount > 0 ? 'partial' : 'paid'
       };
     });
-    
+    console.log(report)
     // Summary statistics
     const summary = {
       total_members: report.length,
