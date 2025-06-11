@@ -74,7 +74,7 @@ const verifyAndRegister = async (req, res, next) => {
     const storedData = otpStore.get(email);
     
     if (!storedData) {
-      console.log('No stored data found for email:', email);
+      console.log('No stored data found    email:', email);
       return res.status(400).json({
         success: false,
         message: 'Registration session expired or invalid'
@@ -108,7 +108,7 @@ const verifyAndRegister = async (req, res, next) => {
     }
 
     const { name, phone, password, gymName, country } = storedData.data;
-
+console.log(storedData.data)
     console.log('Creating Supabase auth user...');
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabaseClient.auth.signUp({
