@@ -99,9 +99,14 @@ const getStaffById = async (req, res, next) => {
  */
 const createStaff = async (req, res, next) => {
   try {
-    const { name, email, phone, role, permissions, password } = req.body;
+    let { name, email, phone, role, permissions, password } = req.body;
     const gym_id = req.user.gym_id;
-    
+
+    // Set default role to 'staff' if not provided
+    if (!role) {
+      role = 'staff';
+    }
+
     if (!name || !email || !role || !password) {
       return res.status(400).json({
         success: false,
