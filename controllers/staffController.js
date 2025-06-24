@@ -99,13 +99,13 @@ const getStaffById = async (req, res, next) => {
  */
 const createStaff = async (req, res, next) => {
   try {
-    const { name, email, phone, role, permissions } = req.body;
+    const { name, email, phone, role, permissions, password } = req.body;
     const gym_id = req.user.gym_id;
     
-    if (!name || !email || !role) {
+    if (!name || !email || !role || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Name, email and role are required'
+        message: 'Name, email, role, and password are required'
       });
     }
     
@@ -120,13 +120,10 @@ const createStaff = async (req, res, next) => {
     if (userExists) {
       userId = userExists.id;
     } else {
-      // Generate a random password for the new user
-      const tempPassword = Math.random().toString(36).slice(-8);
-      
-      // Create user in Supabase Auth
+      // Use admin-provided password for the new user
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email,
-        password: tempPassword,
+        password,
         email_confirm: true
       });
       
@@ -172,7 +169,6 @@ const createStaff = async (req, res, next) => {
           user_id: userId,
           name,
           email,
-          phone,
           role,
           permissions,
           gym_id

@@ -6,25 +6,15 @@ const { checkRole, ROLES } = require('../middleware/roleCheck');
 
 // Apply authentication middleware to all routes
 router.use(authenticate);
-// Apply admin role check to all routes
-router.use(checkRole([ROLES.ADMIN]));
 
-// Get all staff
+// GET routes: accessible to all authenticated users
 router.get('/', staffController.getAllStaff);
-
-// Get a specific staff
 router.get('/:id', staffController.getStaffById);
 
-// Create a new staff
-router.post('/', staffController.createStaff);
-
-// Update a staff
-router.put('/:id', staffController.updateStaff);
-
-// Delete a staff
-router.delete('/:id', staffController.deleteStaff);
-
-// Update staff permissions
-router.patch('/:id/permissions', staffController.updateStaffPermissions);
+// The following routes are admin-only
+router.post('/', checkRole([ROLES.ADMIN]), staffController.createStaff);
+router.put('/:id', checkRole([ROLES.ADMIN]), staffController.updateStaff);
+router.delete('/:id', checkRole([ROLES.ADMIN]), staffController.deleteStaff);
+router.patch('/:id/permissions', checkRole([ROLES.ADMIN]), staffController.updateStaffPermissions);
 
 module.exports = router;
