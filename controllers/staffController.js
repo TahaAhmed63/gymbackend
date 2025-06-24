@@ -166,7 +166,7 @@ const createStaff = async (req, res, next) => {
       }
     }
     
-    // Create staff record
+    // Create staff record (no duplicate check on user_id+gym_id, user_id is always unique)
     const { data, error } = await supabaseClient
       .from('staff')
       .insert([
