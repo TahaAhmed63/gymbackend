@@ -173,7 +173,8 @@ const createStaff = async (req, res, next) => {
         {
           user_id: userId,
           name,
-          email,
+            email,
+            phone,
           role,
           permissions,
           gym_id
