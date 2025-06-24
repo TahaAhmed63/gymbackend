@@ -219,7 +219,20 @@ const login = async (req, res, next) => {
         message: 'User profile not found'
       });
     }
-    
+
+    // Fetch staff data if user is staff
+    let staffData = null;
+    if (userData.role === 'staff') {
+      const { data: staff, error: staffError } = await supabaseClient
+        .from('staff')
+        .select('*')
+        .eq('user_id', data.user.id)
+        .single();
+      if (!staffError && staff) {
+        staffData = staff;
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -230,7 +243,8 @@ const login = async (req, res, next) => {
           name: userData.name,
           role: userData.role,
           gym_id: userData.gym_id,
-          country: userData.country
+          country: userData.country,
+          staff: staffData // include staff data if present
         },
         session: {
           access_token: data.session.access_token,
