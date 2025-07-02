@@ -201,7 +201,7 @@ const login = async (req, res, next) => {
     // Get user role and profile data
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
-      .select('role, name, gym_id, country')
+      .select('role, name, gym_id, country,gym_name')
       .eq('id', data.user.id)
       .single();
     
@@ -243,6 +243,7 @@ const login = async (req, res, next) => {
           name: userData.name,
           role: userData.role,
           gym_id: userData.gym_id,
+          gym_name:userData.gym_name,
           country: userData.country,
           staff: staffData // include staff data if present
         },
