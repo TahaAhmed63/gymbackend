@@ -354,7 +354,6 @@ const checkMemberStatus = async (req, res) => {
 
     for (const member of members) {
       const planEndDate = new Date(member.plan_end_date);
-      
       // Check if plan has expired
       if (planEndDate < today) {
         // Get the latest payment
@@ -379,6 +378,33 @@ const checkMemberStatus = async (req, res) => {
             name: member.name,
             reason: 'Plan expired with unpaid dues'
           });
+        } else if (latestPayment && latestPayment.due_amount === 0) {
+          // Extend plan_end_date by the plan's duration if fully paid
+          // Fetch plan duration
+          const { data: planData, error: planError } = await supabaseClient
+            .from('plans')
+            .select('duration_in_months')
+            .eq('id', member.plan_id)
+            .single();
+
+          if (planData && planData.duration_in_months) {
+            const newPlanEndDate = new Date(planEndDate);
+            newPlanEndDate.setMonth(newPlanEndDate.getMonth() + planData.duration_in_months);
+            const { error: extendError } = await supabaseClient
+              .from('members')
+              .update({ plan_end_date: newPlanEndDate.toISOString() })
+              .eq('id', member.id);
+            if (extendError) {
+              console.error(`Error extending plan_end_date for member ${member.id}:`, extendError);
+              continue;
+            }
+            updatedMembers.push({
+              id: member.id,
+              name: member.name,
+              reason: 'Plan extended after full payment',
+              new_plan_end_date: newPlanEndDate.toISOString()
+            });
+          }
         }
       }
     }
