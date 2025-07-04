@@ -68,6 +68,7 @@ const getMemberById = async (req, res, next) => {
       .from('members')
       .select(`
         *,
+        plan_end_date,
         batches:batch_id(id, name, schedule_time),
         plans:plan_id(id, name, duration_in_months, price)
       `)
