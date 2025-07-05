@@ -361,11 +361,88 @@ const refreshToken = async (req, res, next) => {
   }
 };
 
+/**
+ * Update user profile
+ * @route PATCH /api/auth/profile
+ */
+const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { name, phone, gymName } = req.body;
+
+    // Fetch current user data to check role
+    const { data: currentUser, error: currentUserError } = await supabaseClient
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (currentUserError || !currentUser) {
+      console.error('Error fetching current user for profile update:', currentUserError);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const updateData = {};
+
+    // Staff role can only update name
+    if (currentUser.role === 'staff') {
+      if (name !== undefined) {
+        updateData.name = name;
+      }
+    } else {
+      // Admin and other roles can update name, phone, gymName
+      if (name !== undefined) {
+        updateData.name = name;
+      }
+      if (phone !== undefined) {
+        updateData.phone = phone;
+      }
+      if (gymName !== undefined) {
+        updateData.gym_name = gymName; // Column name in Supabase is gym_name
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields provided for update'
+      });
+    }
+
+    const { data, error } = await supabaseClient
+      .from('users')
+      .update(updateData)
+      .eq('id', userId)
+      .select();
+
+    if (error) {
+      console.error('Error updating user profile:', error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: data[0] // Assuming update returns an array, take the first element
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   initiateRegistration,
   verifyAndRegister,
   login,
   logout,
   getCurrentUser,
-  refreshToken
+  refreshToken,
+  updateProfile
 };

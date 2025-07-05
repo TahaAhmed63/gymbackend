@@ -22,4 +22,7 @@ router.post('/logout', authenticate, authController.logout);
 // Get current user
 router.get('/me', authenticate, authController.getCurrentUser);
 
+// Update user profile
+router.patch('/profile', authenticate, authController.updateProfile);
+
 module.exports = router;
