@@ -43,4 +43,25 @@ router.get('/download/:type',
   reportController.downloadReport
 );
 
+// Download single member reports
+router.get('/download/member/:memberId/profile',
+  checkRole([ROLES.ADMIN, ROLES.STAFF]),
+  reportController.downloadMemberProfile
+);
+
+router.get('/download/member/:memberId/payments',
+  checkRole([ROLES.ADMIN, ROLES.STAFF]),
+  reportController.downloadMemberPayments
+);
+
+router.get('/download/member/:memberId/attendance',
+  checkRole([ROLES.ADMIN, ROLES.STAFF]),
+  reportController.downloadMemberAttendance
+);
+
+router.get('/download/member/:memberId/financial-summary',
+  checkRole([ROLES.ADMIN, ROLES.STAFF]),
+  reportController.downloadMemberFinancialSummary
+);
+
 module.exports = router;

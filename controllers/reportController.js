@@ -551,11 +551,141 @@ const downloadReport = async (req, res) => {
   }
 };
 
+// Download single member profile report
+const downloadMemberProfile = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { data: member, error } = await supabaseClient
+      .from('members')
+      .select(`*, plans:plan_id(id, name, price)`)
+      .eq('id', memberId)
+      .single();
+    if (error || !member) throw error || new Error('Member not found');
+    const fields = ['id', 'name', 'phone', 'email', 'dob', 'status', 'plan_end_date', 'plan_name', 'plan_price'];
+    const data = [{
+      id: member.id,
+      name: member.name,
+      phone: member.phone,
+      email: member.email,
+      dob: member.dob,
+      status: member.status,
+      plan_end_date: member.plan_end_date,
+      plan_name: member.plans?.name || '',
+      plan_price: member.plans?.price || 0
+    }];
+    const csv = fields.join(',') + '\n' + data.map(row => fields.map(f => row[f]).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=member_${memberId}_profile.csv`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate member profile report' });
+  }
+};
+
+// Download single member payment report
+const downloadMemberPayments = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { data: payments, error } = await supabaseClient
+      .from('payments')
+      .select('*')
+      .eq('member_id', memberId)
+      .order('payment_date', { ascending: false });
+    if (error) throw error;
+    if (!payments || payments.length === 0) throw new Error('No payments found');
+    const fields = Object.keys(payments[0]);
+    const csv = fields.join(',') + '\n' + payments.map(row => fields.map(f => row[f]).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=member_${memberId}_payments.csv`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate member payment report' });
+  }
+};
+
+// Download single member attendance report
+const downloadMemberAttendance = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { start_date, end_date } = req.query;
+    if (!start_date || !end_date) return res.status(400).json({ error: 'Start date and end date are required' });
+    const { data: attendance, error } = await supabaseClient
+      .from('attendance')
+      .select('*')
+      .eq('member_id', memberId)
+      .gte('date', start_date)
+      .lte('date', end_date)
+      .order('date', { ascending: true });
+    if (error) throw error;
+    if (!attendance || attendance.length === 0) throw new Error('No attendance records found');
+    const fields = Object.keys(attendance[0]);
+    const csv = fields.join(',') + '\n' + attendance.map(row => fields.map(f => row[f]).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=member_${memberId}_attendance.csv`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate member attendance report' });
+  }
+};
+
+// Download single member financial summary report
+const downloadMemberFinancialSummary = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { start_date, end_date } = req.query;
+    if (!start_date || !end_date) return res.status(400).json({ error: 'Start date and end date are required' });
+    // Payments
+    const { data: payments, error: paymentError } = await supabaseClient
+      .from('payments')
+      .select('amount_paid, total_amount, due_amount, payment_date, payment_method')
+      .eq('member_id', memberId)
+      .gte('payment_date', start_date)
+      .lte('payment_date', end_date);
+    if (paymentError) throw paymentError;
+    // Expenses (if any, assuming expenses can be linked to member_id, else skip)
+    // const { data: expenses, error: expenseError } = await supabaseClient
+    //   .from('expenses')
+    //   .select('amount, date, category')
+    //   .eq('member_id', memberId)
+    //   .gte('date', start_date)
+    //   .lte('date', end_date);
+    // if (expenseError) throw expenseError;
+    // Calculate payment stats
+    const paymentStats = payments.reduce((acc, payment) => {
+      acc.total_received += Number(payment.amount_paid) || 0;
+      acc.total_billed += Number(payment.total_amount) || 0;
+      acc.total_due += Number(payment.due_amount) || 0;
+      const method = payment.payment_method || 'cash';
+      if (!acc.payment_methods[method]) acc.payment_methods[method] = 0;
+      acc.payment_methods[method] += Number(payment.amount_paid) || 0;
+      return acc;
+    }, { total_received: 0, total_billed: 0, total_due: 0, payment_methods: {} });
+    // Prepare CSV
+    const fields = ['total_received', 'total_billed', 'total_due', 'payment_methods'];
+    const data = [{
+      total_received: paymentStats.total_received,
+      total_billed: paymentStats.total_billed,
+      total_due: paymentStats.total_due,
+      payment_methods: JSON.stringify(paymentStats.payment_methods)
+    }];
+    const csv = fields.join(',') + '\n' + data.map(row => fields.map(f => row[f]).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=member_${memberId}_financial_summary.csv`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate member financial summary report' });
+  }
+};
+
 module.exports = {
   getExpiringMembers,
   getBirthdayMembers,
   getPaymentStatusReport,
   getAttendanceSummaryReport,
   getFinancialSummaryReport,
-  downloadReport
+  downloadReport,
+  downloadMemberProfile,
+  downloadMemberPayments,
+  downloadMemberAttendance,
+  downloadMemberFinancialSummary
 };
