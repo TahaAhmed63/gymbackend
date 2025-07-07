@@ -10,7 +10,6 @@ const getAllMembers = async (req, res, next) => {
     const { status, search, batch_id } = req.query;
     const pagination = getPaginationParams(req);
     const gym_id = req.user.gym_id;
-    console.log(req.user.gym_id,"gym_id")
     // Build query
     let query = supabaseClient  
       .from('members')
@@ -38,7 +37,7 @@ const getAllMembers = async (req, res, next) => {
     const { data, error, count } = await query
       .range(pagination.startIndex, pagination.startIndex + pagination.limit - 1)
       .order('created_at', { ascending: false });
-    console.log(data,error,"data erro")
+
     if (error) {
       return res.status(400).json({
         success: false,
@@ -95,19 +94,20 @@ const getMemberById = async (req, res, next) => {
 /**
  * Create a new member
  * @route POST /api/members
+ * Accepts a profile photo URL or base64 string as 'photo' in the request body.
  */
 const createMember = async (req, res, next) => {
   try {
     const { 
       name, phone, email, dob, gender, 
-      status = 'active', batch_id, plan_id 
+      status = 'active', batch_id, plan_id, joinDate, photo // photo from frontend
     } = req.body;
     const gym_id = req.user.gym_id;
 
     // Fetch plan and duration
     const { data: planData, error: planError } = await supabaseClient
       .from('plans')
-      .select('id, duration_in_months')  // fetch duration too
+      .select('id, duration_in_months')
       .eq('id', plan_id)
       .eq('gym_id', gym_id)
       .single();
@@ -136,9 +136,8 @@ const createMember = async (req, res, next) => {
       }
     }
 
-    const joinDate = new Date();
     const planEndDate = new Date(joinDate);
-    planEndDate.setMonth(planEndDate.getMonth() + planData.duration_in_months); // Add months
+    planEndDate.setMonth(planEndDate.getMonth() + planData.duration_in_months);
 
     const newMember = {
       name,
@@ -150,11 +149,16 @@ const createMember = async (req, res, next) => {
       plan_id,
       gym_id,
       join_date: joinDate.toISOString(),
-      plan_end_date: planEndDate.toISOString()  // Add plan end date
+      plan_end_date: planEndDate.toISOString()
     };
 
     if (batch_id) {
       newMember.batch_id = batch_id;
+    }
+
+    // If photo is provided from frontend, add it to the member object
+    if (photo) {
+      newMember.photo = photo;
     }
 
     const { data, error } = await supabaseClient
@@ -184,11 +188,12 @@ const createMember = async (req, res, next) => {
 /**
  * Update a member
  * @route PUT /api/members/:id
+ * Accepts a profile photo URL or base64 string as 'photo' in the request body.
  */
 const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, phone, email, dob, gender, status, batch_id, plan_id } = req.body;
+    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo } = req.body;
     const gym_id = req.user.gym_id;
     
     // Check if member exists and belongs to the gym
@@ -239,20 +244,26 @@ const updateMember = async (req, res, next) => {
       }
     }
     
+    // Build update object, including photo if provided
+    const updateObj = {
+      name,
+      phone,
+      email,
+      dob,
+      gender,
+      status,
+      batch_id,
+      plan_id,
+      updated_at: new Date().toISOString()
+    };
+    if (photo !== undefined) {
+      updateObj.photo = photo;
+    }
+
     // Update member
     const { data, error } = await supabaseClient
       .from('members')
-      .update({
-        name,
-        phone,
-        email,
-        dob,
-        gender,
-        status,
-        batch_id,
-        plan_id,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateObj)
       .eq('id', id)
       .eq('gym_id', gym_id)
       .select()
