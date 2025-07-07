@@ -148,7 +148,7 @@ const createMember = async (req, res, next) => {
       status,
       plan_id,
       gym_id,
-      join_date: joinDate.toISOString(),
+      join_date: new Date(joinDate).toISOString(), // Convert to Date object before calling toISOString()
       plan_end_date: planEndDate.toISOString()
     };
 
