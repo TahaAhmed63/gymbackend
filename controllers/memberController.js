@@ -1,4 +1,4 @@
-const { supabaseClient } = require('../config/supabase');
+const { supabaseClient, supabaseAdmin } = require('../config/supabase');
 const { getPaginationParams, paginatedResponse } = require('../utils/pagination');
 
 /**
@@ -156,9 +156,45 @@ const createMember = async (req, res, next) => {
       newMember.batch_id = batch_id;
     }
 
-    // If photo is provided from frontend, add it to the member object
+    // Handle photo upload if provided
     if (photo) {
-      newMember.photo = photo;
+      try {
+        // Assuming photo is a base64 string from the frontend
+        const base64Data = photo.replace(/^data:image\/\w+;base64,/, "");
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        const fileExtension = photo.substring('data:image/'.length, photo.indexOf(';base64'));
+        const fileName = `member-${Date.now()}.${fileExtension}`;
+        const filePath = `avatars/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+          .from('member-photos') // Use your desired bucket name here
+          .upload(filePath, imageBuffer, {
+            contentType: `image/${fileExtension}`,
+            upsert: false // Set to true if you want to overwrite existing files with the same name
+          });
+
+        if (uploadError) {
+          console.error('Supabase Storage Upload Error:', uploadError);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to upload photo: ' + uploadError.message
+          });
+        }
+
+        // Get public URL
+        const { data: publicUrlData } = supabaseAdmin.storage
+          .from('member-photos')
+          .getPublicUrl(filePath);
+
+        newMember.photo = publicUrlData.publicUrl;
+
+      } catch (uploadProcessError) {
+        console.error('Photo processing or upload error:', uploadProcessError);
+        return res.status(500).json({
+          success: false,
+          message: 'Error processing photo for upload: ' + uploadProcessError.message
+        });
+      }
     }
 
     const { data, error } = await supabaseClient
