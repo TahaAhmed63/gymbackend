@@ -159,22 +159,17 @@ const createMember = async (req, res, next) => {
     // Handle photo upload if provided
     if (photo) {
       try {
-        console.log('Received photo (start):', photo.substring(0, 50) + '...'); // Log start of base64 string
+        // Assuming photo is a base64 string from the frontend
         const base64Data = photo.replace(/^data:image\/\w+;base64,/, "");
-        const mimeTypeMatch = photo.match(/^data:(image\/\w+);base64,/);
-        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'application/octet-stream';
-        console.log('Detected MIME Type:', mimeType);
-
         const imageBuffer = Buffer.from(base64Data, 'base64');
-        const fileExtension = mimeType.split('/')[1]; // e.g., 'jpeg' from 'image/jpeg'
-        console.log('Derived File Extension:', fileExtension);
+        const fileExtension = photo.substring('data:image/'.length, photo.indexOf(';base64'));
         const fileName = `member-${Date.now()}.${fileExtension}`;
         const filePath = `avatars/${fileName}`;
 
         const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
           .from('member-photos') // Use your desired bucket name here
           .upload(filePath, imageBuffer, {
-            contentType: mimeType, // Use the extracted full mimeType
+            contentType: `image/${fileExtension}`,
             upsert: false // Set to true if you want to overwrite existing files with the same name
           });
 
