@@ -107,7 +107,7 @@ const createMember = async (req, res, next) => {
   try {
     const { 
       name, phone, email, dob, gender, 
-      status = 'active', batch_id, plan_id, joinDate, photo, discount_value, admission_fees // photo from frontend
+      status = 'active', batch_id, plan_id, joinDate, photo, discount_value, admission_fees, amount_paid // photo from frontend
     } = req.body;
     const gym_id = req.user.gym_id;
 
@@ -221,11 +221,13 @@ const createMember = async (req, res, next) => {
 
     // If admission_fees are provided, create a payment record for it
     if (admission_fees && admission_fees > 0) {
+      const paid = typeof amount_paid === 'number' ? amount_paid : 0;
+      const due = admission_fees - paid;
       const admissionPayment = {
         member_id: data.id, // Use the newly created member's ID
-        amount_paid: admission_fees,
+        amount_paid: paid,
         total_amount: admission_fees,
-        due_amount: 0, // Admission fee is paid upfront
+        due_amount: due > 0 ? due : 0,
         payment_date: new Date().toISOString(),
         payment_method: 'cash', // Default or could be passed from frontend
         notes: 'Admission Fee',
