@@ -233,11 +233,13 @@ const createMember = async (req, res, next) => {
         plan_price = planObj?.price || 0;
       }
       const paid = typeof amount_paid === 'number' ? amount_paid : 0;
-      const due = (admission_fees + plan_price) - paid;
+      const discount = typeof discount_value === 'number' ? discount_value : 0;
+      const total = admission_fees + plan_price - discount;
+      const due = total - paid;
       const admissionPayment = {
         member_id: data.id, // Use the newly created member's ID
         amount_paid: paid,
-        total_amount: admission_fees + plan_price,
+        total_amount: total,
         due_amount: due > 0 ? due : 0,
         payment_date: new Date().toISOString(),
         payment_method: 'cash', // Default or could be passed from frontend
@@ -274,7 +276,7 @@ const createMember = async (req, res, next) => {
 const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, discount_value, admission_fees } = req.body;
+    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, discount_value, admission_fees, amount_paid } = req.body;
     const gym_id = req.user.gym_id;
     
     // Check if member exists and belongs to the gym
@@ -337,12 +339,12 @@ const updateMember = async (req, res, next) => {
       plan_id,
       updated_at: new Date().toISOString(),
       discount_value,
-      admission_fees
+      admission_fees,
+      amount_paid
     };
     if (photo !== undefined) {
       updateObj.photo = photo;
     }
-
     // Update member
     const { data, error } = await supabaseClient
       .from('members')
@@ -351,14 +353,60 @@ const updateMember = async (req, res, next) => {
       .eq('gym_id', gym_id)
       .select()
       .single();
-    
     if (error) {
       return res.status(400).json({
         success: false,
         message: error.message
       });
     }
-    
+    // If admission/plan/discount/amount_paid changed, update payment record
+    if (admission_fees && plan_id && amount_paid !== undefined) {
+      // Fetch plan price
+      let plan_price = 0;
+      const { data: planObj } = await supabaseClient
+        .from('plans')
+        .select('price')
+        .eq('id', plan_id)
+        .eq('gym_id', gym_id)
+        .single();
+      plan_price = planObj?.price || 0;
+      const paid = typeof amount_paid === 'number' ? amount_paid : 0;
+      const discount = typeof discount_value === 'number' ? discount_value : 0;
+      const total = admission_fees + plan_price - discount;
+      const due = total - paid;
+      // Find the existing admission fee payment
+      const { data: paymentRecord } = await supabaseClient
+        .from('payments')
+        .select('id')
+        .eq('member_id', id)
+        .eq('notes', 'Admission Fee')
+        .single();
+      if (paymentRecord) {
+        // Update payment
+        await supabaseClient
+          .from('payments')
+          .update({
+            amount_paid: paid,
+            total_amount: total,
+            due_amount: due > 0 ? due : 0
+          })
+          .eq('id', paymentRecord.id);
+      } else {
+        // Insert if not exists
+        await supabaseClient
+          .from('payments')
+          .insert([{
+            member_id: id,
+            amount_paid: paid,
+            total_amount: total,
+            due_amount: due > 0 ? due : 0,
+            payment_date: new Date().toISOString(),
+            payment_method: 'cash',
+            notes: 'Admission Fee',
+            gym_id
+          }]);
+      }
+    }
     res.status(200).json({
       success: true,
       message: 'Member updated successfully',
