@@ -18,7 +18,10 @@ const getAllMembers = async (req, res, next) => {
         batches:batch_id(id, name, schedule_time),
         plans:plan_id(id, name, duration_in_months, price),
         discount_value,
-        admission_fees
+        admission_fees,
+        status,
+        plan_end_date,
+        payments(id, amount_paid, due_amount, payment_date, notes)
       `, { count: 'exact' })
       .eq('gym_id', gym_id);
     
@@ -216,6 +219,29 @@ const createMember = async (req, res, next) => {
       });
     }
 
+    // If admission_fees are provided, create a payment record for it
+    if (admission_fees && admission_fees > 0) {
+      const admissionPayment = {
+        member_id: data.id, // Use the newly created member's ID
+        amount_paid: admission_fees,
+        total_amount: admission_fees,
+        due_amount: 0, // Admission fee is paid upfront
+        payment_date: new Date().toISOString(),
+        payment_method: 'cash', // Default or could be passed from frontend
+        notes: 'Admission Fee',
+        gym_id,
+      };
+
+      const { error: paymentError } = await supabaseClient
+        .from('payments')
+        .insert([admissionPayment]);
+
+      if (paymentError) {
+        console.error('Error recording admission fee payment:', paymentError);
+        // Optionally, you might want to revert member creation or notify admin
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Member created successfully',
@@ -394,7 +420,8 @@ const checkMemberStatus = async (req, res) => {
           id,
           amount_paid,
           due_amount,
-          payment_date
+          payment_date,
+          notes
         )
       `)
       .eq('gym_id', gym_id)
@@ -412,10 +439,11 @@ const checkMemberStatus = async (req, res) => {
       // Check if plan has expired
       if (planEndDate < today) {
         // Get the latest payment
-        const latestPayment = member.payments
-          .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0];
+        const planPayments = member.payments.filter(p => p.notes !== 'Admission Fee');
+        const latestPayment = planPayments
+          .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())[0];
 
-        // If there's no payment or the latest payment has dues
+        // If there's no plan-related payment or the latest plan payment has dues
         if (!latestPayment || latestPayment.due_amount > 0) {
           // Update member status to inactive
           const { error: updateError } = await supabaseClient
