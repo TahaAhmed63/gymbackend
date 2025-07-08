@@ -221,12 +221,23 @@ const createMember = async (req, res, next) => {
 
     // If admission_fees are provided, create a payment record for it
     if (admission_fees && admission_fees > 0) {
+      // Fetch plan price
+      let plan_price = 0;
+      if (plan_id) {
+        const { data: planObj } = await supabaseClient
+          .from('plans')
+          .select('price')
+          .eq('id', plan_id)
+          .eq('gym_id', gym_id)
+          .single();
+        plan_price = planObj?.price || 0;
+      }
       const paid = typeof amount_paid === 'number' ? amount_paid : 0;
-      const due = admission_fees - paid;
+      const due = (admission_fees + plan_price) - paid;
       const admissionPayment = {
         member_id: data.id, // Use the newly created member's ID
         amount_paid: paid,
-        total_amount: admission_fees,
+        total_amount: admission_fees + plan_price,
         due_amount: due > 0 ? due : 0,
         payment_date: new Date().toISOString(),
         payment_method: 'cash', // Default or could be passed from frontend
