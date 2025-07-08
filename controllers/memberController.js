@@ -16,7 +16,9 @@ const getAllMembers = async (req, res, next) => {
       .select(`
         *,
         batches:batch_id(id, name, schedule_time),
-        plans:plan_id(id, name, duration_in_months, price)
+        plans:plan_id(id, name, duration_in_months, price),
+        discount_value,
+        admission_fees
       `, { count: 'exact' })
       .eq('gym_id', gym_id);
     
@@ -69,7 +71,9 @@ const getMemberById = async (req, res, next) => {
         *,
         plan_end_date,
         batches:batch_id(id, name, schedule_time),
-        plans:plan_id(id, name, duration_in_months, price)
+        plans:plan_id(id, name, duration_in_months, price),
+        discount_value,
+        admission_fees
       `)
       .eq('id', id)
       .eq('gym_id', gym_id)
@@ -100,7 +104,7 @@ const createMember = async (req, res, next) => {
   try {
     const { 
       name, phone, email, dob, gender, 
-      status = 'active', batch_id, plan_id, joinDate, photo // photo from frontend
+      status = 'active', batch_id, plan_id, joinDate, photo, discount_value, admission_fees // photo from frontend
     } = req.body;
     const gym_id = req.user.gym_id;
 
@@ -149,7 +153,9 @@ const createMember = async (req, res, next) => {
       plan_id,
       gym_id,
       join_date: new Date(joinDate).toISOString(), // Convert to Date object before calling toISOString()
-      plan_end_date: planEndDate.toISOString()
+      plan_end_date: planEndDate.toISOString(),
+      discount_value,
+      admission_fees
     };
 
     if (batch_id) {
@@ -229,7 +235,7 @@ const createMember = async (req, res, next) => {
 const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo } = req.body;
+    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, discount_value, admission_fees } = req.body;
     const gym_id = req.user.gym_id;
     
     // Check if member exists and belongs to the gym
@@ -290,7 +296,9 @@ const updateMember = async (req, res, next) => {
       status,
       batch_id,
       plan_id,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      discount_value,
+      admission_fees
     };
     if (photo !== undefined) {
       updateObj.photo = photo;

@@ -1,0 +1,3 @@
+ALTER TABLE members
+ADD COLUMN discount_value NUMERIC DEFAULT 0,
+ADD COLUMN admission_fees NUMERIC DEFAULT 0; 
