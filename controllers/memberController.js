@@ -340,7 +340,7 @@ const updateMember = async (req, res, next) => {
       updated_at: new Date().toISOString(),
       discount_value,
       admission_fees,
-      amount_paid
+      // amount_paid
     };
     if (photo !== undefined) {
       updateObj.photo = photo;
