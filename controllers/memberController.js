@@ -484,7 +484,7 @@ const checkMemberStatus = async (req, res) => {
   try {
     const { gym_id } = req.user;
 
-    // Get all active members
+    // Get all members (not just active)
     const { data: members, error: membersError } = await supabaseClient
       .from('members')
       .select(`
@@ -501,8 +501,7 @@ const checkMemberStatus = async (req, res) => {
           notes
         )
       `)
-      .eq('gym_id', gym_id)
-      .eq('status', 'active');
+      .eq('gym_id', gym_id);
 
     if (membersError) {
       throw membersError;
@@ -513,33 +512,35 @@ const checkMemberStatus = async (req, res) => {
 
     for (const member of members) {
       const planEndDate = new Date(member.plan_end_date);
-      // Check if plan has expired
+      // Filter out only plan-related payments (not Admission Fee)
+      const planPayments = (member.payments || []).filter(p => p.notes !== 'Admission Fee');
+      // Get the latest plan payment
+      const latestPayment = planPayments
+        .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())[0];
+
+      // If plan has expired
       if (planEndDate < today) {
-        // Get the latest payment
-        const planPayments = member.payments.filter(p => p.notes !== 'Admission Fee');
-        const latestPayment = planPayments
-          .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())[0];
-
-        // If there's no plan-related payment or the latest plan payment has dues
+        // If no plan payment or latest plan payment has dues, set to inactive if not already
         if (!latestPayment || latestPayment.due_amount > 0) {
-          // Update member status to inactive
-          const { error: updateError } = await supabaseClient
-            .from('members')
-            .update({ status: 'inactive' })
-            .eq('id', member.id);
+          if (member.status !== 'inactive') {
+            const { error: updateError } = await supabaseClient
+              .from('members')
+              .update({ status: 'inactive' })
+              .eq('id', member.id);
 
-          if (updateError) {
-            console.error(`Error updating member ${member.id}:`, updateError);
-            continue;
+            if (updateError) {
+              console.error(`Error updating member ${member.id}:`, updateError);
+              continue;
+            }
+
+            updatedMembers.push({
+              id: member.id,
+              name: member.name,
+              reason: 'Plan expired with unpaid dues, set to inactive'
+            });
           }
-
-          updatedMembers.push({
-            id: member.id,
-            name: member.name,
-            reason: 'Plan expired with unpaid dues'
-          });
         } else if (latestPayment && latestPayment.due_amount === 0) {
-          // Extend plan_end_date by the plan's duration if fully paid
+          // If fully paid, extend plan_end_date and set to active if not already
           // Fetch plan duration
           const { data: planData, error: planError } = await supabaseClient
             .from('plans')
@@ -547,22 +548,55 @@ const checkMemberStatus = async (req, res) => {
             .eq('id', member.plan_id)
             .single();
 
+          if (planError) {
+            console.error(`Error fetching plan for member ${member.id}:`, planError);
+            continue;
+          }
+
           if (planData && planData.duration_in_months) {
             const newPlanEndDate = new Date(planEndDate);
             newPlanEndDate.setMonth(newPlanEndDate.getMonth() + planData.duration_in_months);
+
             const { error: extendError } = await supabaseClient
               .from('members')
-              .update({ plan_end_date: newPlanEndDate.toISOString() })
+              .update({ 
+                plan_end_date: newPlanEndDate.toISOString(),
+                status: 'active'
+              })
               .eq('id', member.id);
+
             if (extendError) {
               console.error(`Error extending plan_end_date for member ${member.id}:`, extendError);
               continue;
             }
+
             updatedMembers.push({
               id: member.id,
               name: member.name,
-              reason: 'Plan extended after full payment',
+              reason: 'Plan extended after full payment, set to active',
               new_plan_end_date: newPlanEndDate.toISOString()
+            });
+          }
+        }
+      } else {
+        // Plan is still valid, check if member is inactive but has paid all dues
+        if (member.status === 'inactive') {
+          // If latest plan payment exists and has no dues, set to active
+          if (latestPayment && latestPayment.due_amount === 0) {
+            const { error: reactivateError } = await supabaseClient
+              .from('members')
+              .update({ status: 'active' })
+              .eq('id', member.id);
+
+            if (reactivateError) {
+              console.error(`Error reactivating member ${member.id}:`, reactivateError);
+              continue;
+            }
+
+            updatedMembers.push({
+              id: member.id,
+              name: member.name,
+              reason: 'All dues paid and plan valid, set to active'
             });
           }
         }
