@@ -119,7 +119,7 @@ const createMember = async (req, res, next) => {
       .eq('gym_id', gym_id)
       .single();
 
-    if (!plan_id) {
+    if (!plan_id || planError || !planData) {
       return res.status(400).json({
         success: false,
         message: 'Invalid plan selected'
@@ -276,7 +276,7 @@ const createMember = async (req, res, next) => {
 const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo,joinDate, discount_value, admission_fees, amount_paid } = req.body;
+    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, joinDate, discount_value, admission_fees, amount_paid } = req.body;
     const gym_id = req.user.gym_id;
     
     // Check if member exists and belongs to the gym
@@ -311,23 +311,31 @@ const updateMember = async (req, res, next) => {
       }
     }
     
+    let planData = null;
     if (plan_id) {
-      const { data: planData, error: planError } = await supabaseClient
+      const { data: planDataFetched, error: planError } = await supabaseClient
         .from('plans')
-        .select('id')
+        .select('id, duration_in_months')
         .eq('id', plan_id)
         .eq('gym_id', gym_id)
         .single();
         
-      if (planError || !planData) {
+      if (planError || !planDataFetched) {
         return res.status(400).json({
           success: false,
           message: 'Invalid plan selected'
         });
       }
+      planData = planDataFetched;
     }
-    const planEndDate = new Date(joinDate);
-    planEndDate.setMonth(planEndDate.getMonth() + planData.duration_in_months);
+
+    // Only calculate planEndDate if joinDate and planData are available
+    let planEndDate = null;
+    if (joinDate && planData && planData.duration_in_months !== undefined) {
+      planEndDate = new Date(joinDate);
+      planEndDate.setMonth(planEndDate.getMonth() + planData.duration_in_months);
+    }
+
     // Build update object, including photo if provided
     const updateObj = {
       name,
@@ -337,14 +345,19 @@ const updateMember = async (req, res, next) => {
       gender,
       status,
       batch_id,
-      join_date: new Date(joinDate).toISOString(), // Convert to Date object before calling toISOString()
-      plan_end_date: planEndDate.toISOString(),
       plan_id,
       updated_at: new Date().toISOString(),
       discount_value,
       admission_fees,
       // amount_paid
     };
+
+    if (joinDate) {
+      updateObj.join_date = new Date(joinDate).toISOString();
+    }
+    if (planEndDate) {
+      updateObj.plan_end_date = planEndDate.toISOString();
+    }
     if (photo !== undefined) {
       updateObj.photo = photo;
     }
