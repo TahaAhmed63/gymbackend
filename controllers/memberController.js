@@ -276,13 +276,14 @@ const createMember = async (req, res, next) => {
 const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, discount_value, admission_fees, amount_paid } = req.body;
+    // Add join_date and plan_end_date to destructure from req.body
+    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, discount_value, admission_fees, amount_paid, join_date, plan_end_date } = req.body;
     const gym_id = req.user.gym_id;
     
     // Check if member exists and belongs to the gym
     const { data: existingMember, error: findError } = await supabaseClient
       .from('members')
-      .select('id')
+      .select('id, plan_id, join_date')
       .eq('id', id)
       .eq('gym_id', gym_id)
       .single();
@@ -311,10 +312,11 @@ const updateMember = async (req, res, next) => {
       }
     }
     
+    let planDurationMonths = null;
     if (plan_id) {
       const { data: planData, error: planError } = await supabaseClient
         .from('plans')
-        .select('id')
+        .select('id, duration_in_months')
         .eq('id', plan_id)
         .eq('gym_id', gym_id)
         .single();
@@ -325,8 +327,9 @@ const updateMember = async (req, res, next) => {
           message: 'Invalid plan selected'
         });
       }
+      planDurationMonths = planData.duration_in_months;
     }
-    
+
     // Build update object, including photo if provided
     const updateObj = {
       name,
@@ -340,8 +343,35 @@ const updateMember = async (req, res, next) => {
       updated_at: new Date().toISOString(),
       discount_value,
       admission_fees,
-      // amount_paid
+      amount_paid
     };
+
+    // Handle join_date update and recalculate plan_end_date if needed
+    if (join_date !== undefined && join_date !== null) {
+      // If plan_id is provided, use its duration, else use existing plan_id
+      let durationMonths = planDurationMonths;
+      let planIdToUse = plan_id || existingMember.plan_id;
+      if (!durationMonths && planIdToUse) {
+        // Fetch duration if not already fetched
+        const { data: planData } = await supabaseClient
+          .from('plans')
+          .select('duration_in_months')
+          .eq('id', planIdToUse)
+          .eq('gym_id', gym_id)
+          .single();
+        durationMonths = planData?.duration_in_months || 0;
+      }
+      updateObj.join_date = new Date(join_date).toISOString();
+      if (durationMonths && durationMonths > 0) {
+        const newPlanEndDate = new Date(join_date);
+        newPlanEndDate.setMonth(newPlanEndDate.getMonth() + durationMonths);
+        updateObj.plan_end_date = newPlanEndDate.toISOString();
+      }
+    } else if (plan_end_date !== undefined && plan_end_date !== null) {
+      // Allow direct plan_end_date update if provided
+      updateObj.plan_end_date = new Date(plan_end_date).toISOString();
+    }
+
     if (photo !== undefined) {
       updateObj.photo = photo;
     }
@@ -360,13 +390,14 @@ const updateMember = async (req, res, next) => {
       });
     }
     // If admission/plan/discount/amount_paid changed, update payment record
-    if (admission_fees && plan_id && amount_paid !== undefined) {
+    if (admission_fees && (plan_id || existingMember.plan_id) && amount_paid !== undefined) {
       // Fetch plan price
       let plan_price = 0;
+      const planIdToUse = plan_id || existingMember.plan_id;
       const { data: planObj } = await supabaseClient
         .from('plans')
         .select('price')
-        .eq('id', plan_id)
+        .eq('id', planIdToUse)
         .eq('gym_id', gym_id)
         .single();
       plan_price = planObj?.price || 0;
