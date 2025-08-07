@@ -276,7 +276,7 @@ const createMember = async (req, res, next) => {
 const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo, discount_value, admission_fees, amount_paid } = req.body;
+    const { name, phone, email, dob, gender, status, batch_id, plan_id, photo,joinDate, discount_value, admission_fees, amount_paid } = req.body;
     const gym_id = req.user.gym_id;
     
     // Check if member exists and belongs to the gym
@@ -326,7 +326,8 @@ const updateMember = async (req, res, next) => {
         });
       }
     }
-    
+    const planEndDate = new Date(joinDate);
+    planEndDate.setMonth(planEndDate.getMonth() + planData.duration_in_months);
     // Build update object, including photo if provided
     const updateObj = {
       name,
@@ -336,11 +337,13 @@ const updateMember = async (req, res, next) => {
       gender,
       status,
       batch_id,
+      join_date: new Date(joinDate).toISOString(), // Convert to Date object before calling toISOString()
+      plan_end_date: planEndDate.toISOString(),
       plan_id,
       updated_at: new Date().toISOString(),
       discount_value,
       admission_fees,
-      amount_paid
+      // amount_paid
     };
     if (photo !== undefined) {
       updateObj.photo = photo;
