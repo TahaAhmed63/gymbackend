@@ -52,7 +52,7 @@ const loginValidation = z.object({
 const memberValidation = z.object({
   body: z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
-    email: z.string().email('Invalid email format'),
+    email: z.string().email('Invalid email format').optional(),
     phone: z.string().min(10, 'Phone number must be at least 10 digits'),
     address: z.string().optional(),
     emergencyContact: z.string().optional(),
