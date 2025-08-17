@@ -376,7 +376,7 @@ const updateMember = async (req, res, next) => {
       });
     }
     // If admission/plan/discount/amount_paid changed, update payment record
-    if (admission_fees && plan_id && amount_paid !== undefined) {
+    if (admission_fees && plan_id && amount_paid) {
       // Fetch plan price
       let plan_price = 0;
       const { data: planObj } = await supabaseClient
