@@ -220,7 +220,7 @@ const createMember = async (req, res, next) => {
     }
 
     // If admission_fees are provided, create a payment record for it
-    if (admission_fees && admission_fees > 0) {
+    if (admission_fees && admission_fees >= 0) {
       // Fetch plan price
       let plan_price = 0;
       if (plan_id) {
