@@ -8,6 +8,8 @@ const { Parser } = require('json2csv');
  */
 const getExpiringMembers = async (req, res) => {
   try {
+    const gym_id = req.user.gym_id;
+
     const { timeframe } = req.query;
     let days;
     
@@ -44,9 +46,11 @@ const getExpiringMembers = async (req, res) => {
         )
       `)
       .eq('status', 'active')
+      .eq('gym_id', gym_id)
       .gte('plan_end_date', startDate.toISOString())
       .lte('plan_end_date', endDate.toISOString())
       .order('plan_end_date', { ascending: true });
+
     
     if (error) {
       throw error;
